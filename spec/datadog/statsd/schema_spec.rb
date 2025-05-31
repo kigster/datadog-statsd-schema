@@ -189,16 +189,16 @@ module Datadog
           end
 
           describe "setting values" do
-            subject { described_class.new }
+            subject(:config) { described_class.new }
 
             let(:mock_statsd) { double("statsd") }
             let(:mock_schema) { double("schema") }
             let(:test_tags) { { region: "us-east-1" } }
 
             before do
-              subject.statsd = mock_statsd
-              subject.schema = mock_schema
-              subject.tags = test_tags
+              config.statsd = mock_statsd
+              config.schema = mock_schema
+              config.tags = test_tags
             end
 
             its(:statsd) { is_expected.to eq(mock_statsd) }
@@ -311,26 +311,26 @@ module Datadog
             let(:status_code_tag) { request_namespace.find_tag(:status_code) }
 
             describe "controller tag validation" do
-              subject { controller_tag }
+              subject(:tag) { controller_tag }
 
               it "accepts snake_case values" do
-                expect(subject.allows_value?("home_controller")).to be true
+                expect(tag.allows_value?("home_controller")).to be true
               end
 
-              it "accepts PascalCase values (should be transformed)" do
-                expect(subject.allows_value?("HomeController")).to be true
+              it "accepts CamelCase values (should be transformed)" do
+                expect(tag.allows_value?("HomeController")).to be true
               end
             end
 
             describe "status_code tag validation" do
-              subject { status_code_tag }
+              subject(:tag) { status_code_tag }
 
               it "accepts valid HTTP status codes" do
-                expect(subject.valid_value?(200)).to be true
+                expect(tag.valid_value?(200)).to be true
               end
 
               it "rejects invalid status codes" do
-                expect(subject.valid_value?(999)).to be false
+                expect(tag.valid_value?(999)).to be false
               end
             end
           end

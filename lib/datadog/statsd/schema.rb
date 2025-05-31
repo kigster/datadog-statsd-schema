@@ -12,6 +12,16 @@ require_relative "schema/schema_builder"
 require_relative "schema/emitter"
 
 module Datadog
+  class << self
+    def emitter(...)
+      ::Datadog::Statsd::Schema::Emitter.new(...)
+    end
+
+    def schema(...)
+      ::Datadog::Statsd::Schema.new(...)
+    end
+  end
+
   class Statsd
     module Schema
       class Error < StandardError

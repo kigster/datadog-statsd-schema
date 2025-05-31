@@ -152,67 +152,10 @@ module Datadog
 
         attr_reader :tags, :ab_test, :sample_rate, :metric
 
-        # @description You can create instances of this class and use the instance to emit custom
-        #     metrics. You may want to do this, instead of using the class methods directly, for
-        #     two reasons:
-        #
-        #        1. You want to send metrics from several places in the codebase, but have them
-        #           share the "emitter" tag (which i.e. defines the source, a class, or object)
-        #           emitting the metric, or any other tags for that matter.
-        #
-        #        2. You want to send metrics with a different sample rate than the defaults.
-        #
-        #     In both cases, you can create an instance of this class and use it to emit metrics.
-        #
-        #     NAMING METRICS:
-        #     ================================
-        #     Please remember that naming *IS* important. Good naming is self-documenting, easy
-        #     to slice the data by, and easy to understand and analyze. Keep the number of unique
-        #     metric names down, number of tags down, and the number of possible tag values
-        #     should always be finite. If in doubt, set a tag, instead of creating a new metric.
-        #
-        # @example Tracking email delivery with statsd. Imagine that we want to track email delivery.
-        #     But we have many types of emails that we send. Instead of creating new metric for
-        #     each new email type, use the tag "email_type" to specify what type of email it is.
-        #     Keep metric name list short, eg: "emails.queued", "emails.sent", "emails.delivered"
-        #     are good metrics as they define a distinctly unique events. However, should you want
-        #     to differentiate between different types of emails, you could theoretically do the
-        #     following: (BAD EXAMPLE, DO NOT FOLLOW) — "emails.sent.welcome", "emails.sent.payment".
-        #     But this example conflates two distinct events into a single metric. Instead, we should
-        #     use tags to set event properties, such as what type of email that is.
-        #
-        #     @welcome_statsd = Datadog::Statsd::Schema::Emitter.new(self, tags: { email_type: 'welcome' })
-        #
-        #     @welcome_statsd.increment('emails.queued')
-        #     @welcome_statsd.increment('emails.delivered', by: count)
-        #     @welcome_statsd.gauge('emails.queue.size', Queue.size)
-        #
-        # @param emitter [String, Symbol, Module, Class] Attach a context to the source emitting the metric.
-        #     This can be a "self", a string, a symbol, a module, or a class. It's a shorthand
-        #     for adding the tag "emitter:#{emitter}" to the metric. When you pass a "self" or
-        #     class/module, the value will be downcased and underscored, passing self (an instance of
-        #     Users::SessionsController) will tag this metric with "emitter:users.sessions_controller".
-        #
-        # @param metric [String] The (optional) name of the metric to track. WARNING: if you set the
-        #     metric name in the constructor, plaase make sure you send the data for the metric using
-        #     consistent or compatible methods. For example, once you send INCREMENT(), you can no longer
-        #     send the same metric with GAUGE(), or HISTOGRAM(), but you CAN use DECREMENT().
-        #
-        # @param tags [Hash] The (optional) additional tags to add to the metric sent with this wrapper.
-        # @param ab_test [Hash] The (optional) AB test name => group mapping send as the tags ab_test_name/group.
-        # @param sample_rate [Float] The (optional) override the default sample rate for this emitters/metric.
-        #
-        # @example
-        #   Datadog::Statsd::Schema::Emitter.new(self).increment('emails.sent', by: 2)
-        #   Datadog::Statsd::Schema::Emitter.new(nil, ab_test: { 'login_test_2025' => 'control' }).increment('users.logged_in')
-        #
-        #   Datadog::Statsd::Schema::Emitter.new(SessionsController).gauge('users.on.site', 100)
-        #   Datadog::Statsd::Schema::Emitter.new(SessionsController, metric: 'users.on.site').gauge(100)
-        #
         def initialize(emitter = nil, metric: nil, tags: nil, ab_test: nil, sample_rate: nil)
           if emitter.nil? && metric.nil? && tags.nil? && ab_test.nil? && sample_rate.nil?
             raise ArgumentError,
-                  "Statsd::Schema::Emitter: use class methods if you are passing nothing to the constructor."
+                  "Datadog::Statsd::Schema::Emitter: use class methods if you are passing nothing to the constructor."
           end
 
           @sample_rate = sample_rate || 1.0

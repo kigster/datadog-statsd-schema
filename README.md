@@ -214,7 +214,72 @@ Let's say this monitor only tracks requests from logged in premium users,  then 
       
 The above code will send two metrics: `web.request.total` as a counter, tagged with: `{ billing_plan: :premium, logged_in: :logged_in, uri: '/home/settings' }` and the second time for the `uri: '/app/calendar'`. 
 
+### Emitter
 
+You can create instances of this class and use the instance to emit custom metrics. You may want to do this, instead of using the class methods directly, for two reasons:
+
+ 1. You want to send metrics from several places in the codebase, but have them share the "emitter" tag (which i.e. defines the source, a class, or object)emitting the metric, or any other tags for that matter.
+
+ 2. You want to send metrics with a different sample rate than the defaults.
+
+In both cases, you can create an instance of this class and use it to emit metrics.
+
+#### Naming Metrics
+
+Please remember that naming *IS* important. Good naming is self-documenting, easy to slice the data by, and easy to understand and analyze. Keep the number of unique metric names down, number of tags down, and the number of possible tag values should always be finite. If in doubt, set a tag, instead of creating a new metric.
+
+#### Example — Tracking email delivery 
+
+Imagine that we want to track email delivery. But we have many types of emails that we send. Instead of creating new metric for each new email type, use the tag "email_type" to specify what type of email it is.
+
+Keep metric name list short, eg: "emails.queued", "emails.sent", "emails.delivered" are good metrics as they define a distinctly unique events. However, should you want to differentiate between different types of emails, you could theoretically do the following: (BAD EXAMPLE, DO NOT FOLLOW) — "emails.sent.welcome", "emails.sent.payment". But this example conflates two distinct events into a single metric. Instead, we should use tags to set event properties, such as what type of email that is.
+
+```ruby
+
+    emails_emitter = Datadog.emitter(
+      self, 
+      metric: 'emails'
+    )
+
+    emails_emitter.increment('queued.total')
+    emails_emitter.increment('delivered.total', by: count)
+    emails_emitter.gauge('queue.size', EmailQueue.size)
+```
+
+#### What's the Emitter Constructor Arguments?
+
+The first argument to the `Emitter.new()` or `Datadog.emitter()` (those are equivalent) is an object or a string or a class that's converted to a tag called `emitter`. This is the source class or object that sent the metric. The same mwtric may come from various places in your code, and `emitter` tag allows you to differentiate between them.
+
+Subsequent arguments are hash arguments. 
+
+ * `metric` — The (optional) name of the metric prefix to track. If set to, eg. `emails`, then any subsequent method sending metric will prepend `emails.` to it, for example:
+
+```ruby
+emitter.increment('sent.total', by: 3)
+```
+
+Will actually increment the metric `emails.sent.total`.
+
+#### Other Examples
+
+```ruby
+
+  Datadog.emitter(self)
+    .increment('emails.sent', by: 2)
+
+  Datadog.emitter(ab_test: { 'login_test_2025' => 'control' })
+    .increment('users.logged_in')
+  # => tags: { ab_test_name: 'login_test_2025', 
+  #            ab_test_group: 'control' } 
+
+  Datadog.emitter(SessionsController, metric: 'users')
+     .gauge('logged_in', 100)
+
+  sessions = Datadog.emitter(SessionsController, metric: 'users')
+  # => tags: { emitter: "sessions_controller" }
+  sessions.gauge('active', 100)
+  sessions.distribution('active.total', 114)
+```
 
 ## Installation
 
