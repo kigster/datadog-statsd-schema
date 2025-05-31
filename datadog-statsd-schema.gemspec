@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Konstantin Gredeskoul"]
   spec.email = ["kigster@gmail.com"]
 
-  spec.summary = "Datadog Schema for Statsd metrics and Tags"
-  spec.description = "Datadog Schema for Statsd metrics and Tags"
+  spec.summary = "An adapter or wrapper for Datadog Statsd that allows pre-declaring of metrics, tags and tag values and validating them against the schema."
+  spec.description = "This gem is an adapter for the dogstatsd-ruby gem. Unlike the Datadog::Statsd metric sender, this gem supports pre-declaring schemas defining allowed metrics and their types, the tags that apply to them, and tag values that must be validated before streamed to Datadog. This approach allows for a more robust and consistent way to ensure that metrics follow a well-thought-out naming scheme and are validated before being sent to Datadog."
   spec.homepage = "https://github.com/kigster/datadog-statsd-schema"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
