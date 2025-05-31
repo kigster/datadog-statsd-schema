@@ -33,6 +33,7 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   spec.add_dependency "activesupport"
+  spec.add_dependency "colored2"
   spec.add_dependency "dogstatsd-ruby"
   spec.add_dependency "dry-schema"
   spec.add_dependency "dry-struct"

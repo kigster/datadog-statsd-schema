@@ -15,21 +15,21 @@ module Datadog
       end
 
       def build_sample_schema
-        ::Datadog.schema do
+        Schema.new do
           namespace :web do
             tags do
               tag :controller, values: %w[users posts home]
               tag :action, values: %w[index show create update destroy]
               tag :method, values: %i[get post put delete], type: :symbol
               tag :status_code, type: :integer, validate: ->(code) { (100..599).include?(code.to_i) }
-              tag :env, values: %w[development staging production]
+              tag :environment, values: %w[development staging production]
             end
 
             metrics do
               counter :page_views,
                       description: "Number of page views",
                       tags: {
-                        allowed: %w[controller action method env],
+                        allowed: %w[controller action method],
                         required: %w[controller]
                       }
 
@@ -42,7 +42,9 @@ module Datadog
 
               gauge :active_users,
                     description: "Current active users",
-                    tags: { allowed: %w[env] }
+                    tags: {
+                      allowed: %w[environment]
+                    }
             end
           end
         end
@@ -101,19 +103,19 @@ module Datadog
           it "raises UnknownMetricError for non-existent metric" do
             expect do
               emitter.increment("unknown.metric")
-            end.to raise_error(ArgumentError, /Unknown metric 'unknown.metric'/)
+            end.to raise_error(Datadog::Statsd::Schema::UnknownMetricError, /Unknown metric 'unknown.metric'/)
           end
 
           it "provides suggestions for similar metric names" do
             expect do
               emitter.increment("web.page_view") # missing 's'
-            end.to raise_error(ArgumentError, /Did you mean: web\.page_views/)
+            end.to raise_error(Datadog::Statsd::Schema::UnknownMetricError, /Did you mean: web\.page_views/)
           end
 
           it "lists available metrics when no suggestions found" do
             expect do
               emitter.increment("completely.different")
-            end.to raise_error(ArgumentError, /Available metrics:.*web\.page_views/)
+            end.to raise_error(Datadog::Statsd::Schema::UnknownMetricError, /Available metrics:.*web\.page_views/)
           end
         end
 
@@ -121,7 +123,8 @@ module Datadog
           it "raises InvalidMetricTypeError" do
             expect do
               emitter.gauge("web.page_views") # should be counter
-            end.to raise_error(ArgumentError, /Invalid metric type.*Expected 'counter', got 'gauge'/)
+            end.to raise_error(Datadog::Statsd::Schema::InvalidMetricTypeError,
+                               /Invalid metric type.*Expected 'counter', got 'gauge'/)
           end
         end
 
@@ -129,7 +132,7 @@ module Datadog
           it "raises MissingRequiredTagError" do
             expect do
               emitter.increment("web.page_views") # missing required 'controller' tag
-            end.to raise_error(ArgumentError, /Missing required tags.*controller/)
+            end.to raise_error(Datadog::Statsd::Schema::MissingRequiredTagError, /Missing required tags.*controller/)
           end
 
           it "allows metric when all required tags are present" do
@@ -149,7 +152,7 @@ module Datadog
                 "web.page_views",
                 tags: { controller: "users", invalid_tag: "value" }
               )
-            end.to raise_error(ArgumentError, /Invalid tags.*invalid_tag/)
+            end.to raise_error(Datadog::Statsd::Schema::InvalidTagError, /Invalid tags.*invalid_tag/)
           end
         end
 
@@ -161,7 +164,7 @@ module Datadog
                   "web.page_views",
                   tags: { controller: "invalid_controller" }
                 )
-              end.to raise_error(ArgumentError,
+              end.to raise_error(Datadog::Statsd::Schema::InvalidTagError,
                                  /Invalid value 'invalid_controller'.*Allowed values: users, posts, home/)
             end
           end
@@ -174,7 +177,7 @@ module Datadog
                   100,
                   tags: { controller: "users", action: "show", status_code: "not_a_number" }
                 )
-              end.to raise_error(ArgumentError, /Tag 'status_code'.*must be an integer/)
+              end.to raise_error(Datadog::Statsd::Schema::InvalidTagError, /Tag 'status_code'.*must be an integer/)
             end
 
             it "allows string representation of integers" do
@@ -201,7 +204,7 @@ module Datadog
                   100,
                   tags: { controller: "users", action: "show", status_code: 999 }
                 )
-              end.to raise_error(ArgumentError, /Custom validation failed/)
+              end.to raise_error(Datadog::Statsd::Schema::InvalidTagError, /Custom validation failed/)
             end
           end
         end
@@ -214,7 +217,7 @@ module Datadog
           it "raises error for invalid metrics" do
             expect do
               emitter.increment("unknown.metric")
-            end.to raise_error(ArgumentError)
+            end.to raise_error(Datadog::Statsd::Schema::UnknownMetricError)
           end
         end
 
@@ -231,7 +234,7 @@ module Datadog
                   tags: { emitter: "test_controller" }
                 )
                 emitter.increment("unknown.metric")
-              end.to output(/Schema validation warning/).to_stderr
+              end.to output(/Schema Validation Warning/).to_stderr
             end.not_to raise_error
           end
 
@@ -289,19 +292,16 @@ module Datadog
           described_class.new(
             "TestController",
             metric: "web.page_views",
-            tags: { env: "production" },
+            tags: { environment: "production" },
             schema: sample_schema
           )
         end
 
         context "when using constructor defaults with schema validation" do
           it "validates constructor metric and tags" do
-            expect(mock_statsd).to receive(:increment).with(
-              "web.page_views",
-              tags: hash_including(controller: "users", env: "production", emitter: "test_controller")
-            )
-
-            emitter.increment(tags: { controller: "users" })
+            expect do
+              emitter.increment(tags: { controller: "users" })
+            end.to raise_error(Datadog::Statsd::Schema::InvalidTagError)
           end
 
           it "raises error when constructor metric is invalid" do
@@ -313,7 +313,7 @@ module Datadog
 
             expect do
               invalid_emitter.increment
-            end.to raise_error(ArgumentError, /Unknown metric/)
+            end.to raise_error(Datadog::Statsd::Schema::UnknownMetricError, /Unknown metric/)
           end
         end
 
@@ -365,9 +365,9 @@ module Datadog
           expect(mock_statsd).to receive(:gauge).with(
             "web.active_users",
             100,
-            tags: hash_including(env: "production", emitter: "test_controller")
+            tags: hash_including(environment: "production", emitter: "test_controller")
           )
-          emitter.gauge("web.active_users", 100, tags: { env: "production" })
+          emitter.gauge("web.active_users", 100, tags: { environment: "production" })
         end
 
         it "validates distribution metrics correctly" do
@@ -390,19 +390,22 @@ module Datadog
         it "provides clear error for missing required tags" do
           expect do
             emitter.distribution("web.request_duration", 100, tags: { controller: "users" })
-          end.to raise_error(ArgumentError, /Missing required tags.*action.*Required tags: controller, action/)
+          end.to raise_error(Datadog::Statsd::Schema::MissingRequiredTagError,
+                             /Missing required tags.*action.*Required tags: controller, action/)
         end
 
         it "provides clear error for invalid tag values" do
           expect do
             emitter.increment("web.page_views", tags: { controller: "invalid" })
-          end.to raise_error(ArgumentError, /Invalid value 'invalid'.*Allowed values: users, posts, home/)
+          end.to raise_error(Datadog::Statsd::Schema::InvalidTagError,
+                             /Invalid value 'invalid'.*Allowed values: users, posts, home/)
         end
 
         it "provides clear error for type mismatches" do
           expect do
             emitter.gauge("web.page_views")
-          end.to raise_error(ArgumentError, /Invalid metric type.*Expected 'counter', got 'gauge'/)
+          end.to raise_error(Datadog::Statsd::Schema::InvalidMetricTypeError,
+                             /Invalid metric type.*Expected 'counter', got 'gauge'/)
         end
       end
 

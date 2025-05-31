@@ -17,6 +17,7 @@ module Datadog
         attribute :type, Types::Strict::Symbol.default(:string)
         attribute :transform, Types::Array.of(Types::Symbol).default([].freeze)
         attribute :validate, Types::Any.optional.default(nil) # Proc for custom validation
+        attribute :namespace, Types::Strict::Symbol.optional.default(nil)
 
         # Check if a value is allowed for this tag
         def allows_value?(value)

@@ -116,7 +116,8 @@ module Datadog
               values: options[:values],
               type: options[:type] || :string,
               transform: Array(options[:transform] || []),
-              validate: options[:validate]
+              validate: options[:validate],
+              namespace: @current_namespace
             )
             @tags[name.to_sym] = tag_def
           end
@@ -149,7 +150,8 @@ module Datadog
                 allowed_tags: extract_allowed_tags(options),
                 required_tags: extract_required_tags(options),
                 inherit_tags: options[:inherit_tags],
-                units: options[:units]
+                units: options[:units],
+                namespace: @current_namespace
               )
 
               unless block.nil?

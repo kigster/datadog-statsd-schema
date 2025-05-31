@@ -1,60 +1,35 @@
 # frozen_string_literal: true
 
+require "colored2"
+require "active_support/core_ext/string/inflections"
+
 module Datadog
   class Statsd
     module Schema
-      class SchemaError < Error; end
+      class SchemaError < StandardError
+        attr_reader :namespace, :metric, :tag
 
-      class UnknownMetricError < SchemaError
-        def initialize(namespace, metric_name)
-          super(
-            "Unknown metric '#{namespace}.#{metric_name}'. " \
-            "Please define it in your schema first."
-          )
+        def initialize(message = nil, namespace: "<-no-namespace->", metric: "<-no-metric->", tag: "<-no-tag->")
+          @namespace = namespace
+          @metric = metric
+          @tag = tag
+          message ||= "#{self.class.name.underscore.gsub("_", " ").split(".").map(&:capitalize).join(" ")} Error " \
+                      "{ namespace: #{namespace}, metric: #{metric}, tag: #{tag} }"
+          super(message)
         end
       end
 
-      class InvalidTagError < SchemaError
-        def initialize(metric_name, tag_name, allowed_tags)
-          super(
-            "Invalid tag '#{tag_name}' for metric '#{metric_name}'. " \
-            "Allowed tags: #{allowed_tags.join(", ")}"
-          )
-        end
-      end
+      class UnknownMetricError < SchemaError; end
 
-      class MissingRequiredTagError < SchemaError
-        def initialize(metric_name, required_tag, required_tags)
-          super(
-            "Missing required tag '#{required_tag}' for metric '#{metric_name}'. " \
-            "Required tags: #{required_tags.join(", ")}"
-          )
-        end
-      end
+      class InvalidTagError < SchemaError; end
 
-      class InvalidMetricTypeError < SchemaError
-        def initialize(metric_name, expected_type, actual_type)
-          super(
-            "Invalid metric type for '#{metric_name}'. " \
-            "Expected '#{expected_type}', got '#{actual_type}'"
-          )
-        end
-      end
+      class MissingRequiredTagError < SchemaError; end
 
-      class DuplicateMetricError < SchemaError
-        def initialize(namespace, metric_name)
-          super("Metric '#{namespace}.#{metric_name}' is already defined")
-        end
-      end
+      class InvalidMetricTypeError < SchemaError; end
 
-      class InvalidNamespaceError < SchemaError
-        def initialize(namespace)
-          super(
-            "Unknown namespace '#{namespace}'. " \
-            "Please define it in your schema first."
-          )
-        end
-      end
+      class DuplicateMetricError < SchemaError; end
+
+      class InvalidNamespaceError < SchemaError; end
     end
   end
 end

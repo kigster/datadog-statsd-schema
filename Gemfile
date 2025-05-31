@@ -5,7 +5,11 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in datadog-statsd-schema.gemspec
 gemspec
 
+gem "activesupport"
+gem "amazing_print"
+gem "git"
 gem "irb"
+gem "ostruct"
 gem "rake", "~> 13.0"
 gem "rspec"
 gem "rspec-its"

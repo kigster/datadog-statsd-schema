@@ -2,6 +2,10 @@
 
 # Datadog::Statsd::Schema
 
+This is a wrapper around  [dogstatsd-ruby](https://github.com/DataDog/dogstatsd-ruby) gem that sends custom metrics via StatsD, with additional layer of validation based on a configurable schemas. Schemas can validate allowed metric names, associated tag and tag values. This approach can guide an organization towards a clear declarative approach to metrics and their tags, and then emitting them from within the application with the insurance that any invalid value would raise an exception. 
+
+We invite you to explore some of the provided [examples](./examples/README.md) which can be run from project's root, and are described in the linked README.
+
 ## Introduction
 
 This is an extension to gem [dogstatsd-ruby](https://github.com/DataDog/dogstatsd-ruby) which enhances the original with a robust schema definition for both the custom metrics being sent, and the tags allowed (or required) to attach to the metric. 
@@ -18,13 +22,13 @@ But the real power comes from defining a Schema of metrics and tags, and providi
 
 There are 5 total metric types you can send with Statsd, and it's important to understand the differences:
 
-* COUNT (eg, Datadog::Statsd::Emitter.increment('emails.sent', by: 2))
-* GAUGE (eg, Datadog::Statsd::Emitter.gauge('users.on.site', 100))
-* HISTOGRAM (eg, Datadog::Statsd::Emitter.histogram('page.load.time', 100))
-* DISTRIBUTION (eg, Datadog::Statsd::Emitter.distribution('page.load.time', 100))
-* SET (eg, Datadog::Statsd::Emitter.set('users.unique', '12345'))
+* `COUNT` (eg, `Datadog::Statsd::Emitter.increment('emails.sent', by: 2)`)
+* `GAUGE` (eg, `Datadog::Statsd::Emitter.gauge('users.on.site', 100)`)
+* `HISTOGRAM` (eg, `Datadog::Statsd::Emitter.histogram('page.load.time', 100)`)
+* `DISTRIBUTION` (eg,`Datadog::Statsd::Emitter.distribution('page.load.time', 100)`)
+* `SET` (eg, `Datadog::Statsd::Emitter.set('users.unique', '12345')`)
 
-NOTE: that HISTOGRAM converts your metric into FIVE separate metrics (with suffixes .max, .median, avg, .count, p95), while DISTRIBUTION explodes into TEN separate metrics (see the documentation). Do NOT use SET unless you know what you are doing.
+NOTE: that `HISTOGRAM` converts your metric into FIVE separate metrics (with suffixes .`max`, .`median`, `avg`, .`count`, `p95`), while `DISTRIBUTION` explodes into TEN separate metrics (see the documentation). Do NOT use SET unless you know what you are doing.
 
 You can send metrics via class methods of `Datadog::Statsd::Emitter`, or by instantiating the class.
 

@@ -22,6 +22,7 @@ module Datadog
         attribute :required_tags, Types::Array.of(Types::Symbol).default([].freeze)
         attribute :inherit_tags, Types::String.optional.default(nil)
         attribute :units, Types::String.optional.default(nil)
+        attribute :namespace, Types::Strict::Symbol.optional.default(nil)
 
         # Get the full metric name including namespace path
         def full_name(namespace_path = [])

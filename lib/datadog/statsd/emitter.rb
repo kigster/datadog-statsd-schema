@@ -3,6 +3,14 @@
 require "forwardable"
 require "datadog/statsd"
 require "ostruct"
+require "active_support/core_ext/string/inflections"
+
+# Load colored2 for error formatting if available
+begin
+  require "colored2"
+rescue LoadError
+  # colored2 not available, use plain text
+end
 
 # Load schema classes if available
 begin
@@ -32,13 +40,14 @@ module Datadog
       #     @see Datadog::Statsd::Emitter.new for more details.
       #
       class << self
-        attr_reader :datadog_statsd
+        attr_accessor :datadog_statsd
 
         # @return [Datadog::Statsd, NilClass] The Datadog Statsd client instance or nil if not
         #     currently connected.
         def statsd
-          @datadog_statsd = connect unless defined?(@datadog_statsd)
-          @datadog_statsd
+          return @datadog_statsd if defined?(@datadog_statsd)
+
+          @datadog_statsd = ::Datadog::Statsd::Schema.configuration.statsd
         end
 
         extend Forwardable
@@ -223,7 +232,7 @@ module Datadog
         begin
           validate_metric_exists(metric_name, metric_type)
           validate_metric_tags(metric_name, provided_tags)
-        rescue StandardError => e
+        rescue Datadog::Statsd::Schema::SchemaError => e
           handle_validation_error(e)
         end
       end
@@ -243,7 +252,7 @@ module Datadog
           error_message += ". Available metrics: #{all_metrics.keys.first(5).join(", ")}"
           error_message += ", ..." if all_metrics.size > 5
 
-          raise ArgumentError, error_message
+          raise Datadog::Statsd::Schema::UnknownMetricError.new(error_message, metric: metric_name)
         end
 
         # Validate metric type matches
@@ -251,7 +260,11 @@ module Datadog
         return unless expected_type != metric_type
 
         error_message = "Invalid metric type for '#{metric_name}'. Expected '#{expected_type}', got '#{metric_type}'"
-        raise ArgumentError, error_message
+        raise Datadog::Statsd::Schema::InvalidMetricTypeError.new(
+          error_message,
+          namespace: metric_info[:namespace_path].join("."),
+          metric: metric_name
+        )
       end
 
       def validate_metric_tags(metric_name, provided_tags)
@@ -271,7 +284,11 @@ module Datadog
           error_message = "Missing required tags for metric '#{metric_name}': #{missing_required.join(", ")}"
           error_message += ". Required tags: #{metric_definition.required_tags.join(", ")}"
 
-          raise ArgumentError, error_message
+          raise Datadog::Statsd::Schema::MissingRequiredTagError.new(
+            error_message,
+            namespace: metric_info[:namespace_path].join("."),
+            metric: metric_name
+          )
         end
 
         # Check for invalid tags (if metric has allowed_tags restrictions)
@@ -286,7 +303,11 @@ module Datadog
             error_message += ". Allowed tags: #{metric_definition.allowed_tags.join(", ")}"
           end
 
-          raise ArgumentError, error_message
+          raise Datadog::Statsd::Schema::InvalidTagError.new(
+            error_message,
+            namespace: metric_info[:namespace_path].join("."),
+            metric: metric_name
+          )
         end
 
         # Validate tag values against schema definitions (including framework tags)
@@ -297,22 +318,30 @@ module Datadog
           tag_definition = effective_tags[tag_name.to_sym]
           next unless tag_definition
 
-          validate_tag_value(metric_name, tag_name, tag_value, tag_definition)
+          validate_tag_value(metric_name, tag_name, tag_value, tag_definition, metric_info)
         end
       end
 
-      def validate_tag_value(metric_name, tag_name, tag_value, tag_definition)
+      def validate_tag_value(metric_name, tag_name, tag_value, tag_definition, metric_info)
         # Type validation
         case tag_definition.type
         when :integer
           unless tag_value.is_a?(Integer) || (tag_value.is_a?(String) && tag_value.match?(/^\d+$/))
-            raise ArgumentError,
-                  "Tag '#{tag_name}' for metric '#{metric_name}' must be an integer, got #{tag_value.class}"
+            raise Datadog::Statsd::Schema::InvalidTagError.new(
+              "Tag '#{tag_name}' for metric '#{metric_name}' must be an integer, got #{tag_value.class}",
+              namespace: metric_info[:namespace_path].join("."),
+              metric: metric_name,
+              tag: tag_name
+            )
           end
         when :symbol
           unless tag_value.is_a?(Symbol) || tag_value.is_a?(String)
-            raise ArgumentError,
-                  "Tag '#{tag_name}' for metric '#{metric_name}' must be a symbol or string, got #{tag_value.class}"
+            raise Datadog::Statsd::Schema::InvalidTagError.new(
+              "Tag '#{tag_name}' for metric '#{metric_name}' must be a symbol or string, got #{tag_value.class}",
+              namespace: metric_info[:namespace_path].join("."),
+              metric: metric_name,
+              tag: tag_name
+            )
           end
         end
 
@@ -321,10 +350,14 @@ module Datadog
           normalized_value = tag_value.to_s
           allowed_values = Array(tag_definition.values).map(&:to_s)
 
-          unless allowed_values.include?(normalized_value) || value_matches_pattern?(normalized_value,
-                                                                                     tag_definition.values)
-            raise ArgumentError,
-                  "Invalid value '#{tag_value}' for tag '#{tag_name}' in metric '#{metric_name}'. Allowed values: #{allowed_values.join(", ")}"
+          unless allowed_values.include?(normalized_value) ||
+                 value_matches_pattern?(normalized_value, tag_definition.values)
+            raise Datadog::Statsd::Schema::InvalidTagError.new(
+              "Invalid value '#{tag_value}' for tag '#{tag_name}' in metric '#{metric_name}'. Allowed values: #{allowed_values.join(", ")}",
+              namespace: metric_info[:namespace_path].join("."),
+              metric: metric_name,
+              tag: tag_name
+            )
           end
         end
 
@@ -332,8 +365,12 @@ module Datadog
         return unless tag_definition.validate && tag_definition.validate.respond_to?(:call)
         return if tag_definition.validate.call(tag_value)
 
-        raise ArgumentError,
-              "Custom validation failed for tag '#{tag_name}' with value '#{tag_value}' in metric '#{metric_name}'"
+        raise Datadog::Statsd::Schema::InvalidTagError.new(
+          "Custom validation failed for tag '#{tag_name}' with value '#{tag_value}' in metric '#{metric_name}'",
+          namespace: metric_info[:namespace_path].join("."),
+          metric: metric_name,
+          tag: tag_name
+        )
       end
 
       def value_matches_pattern?(value, patterns)
@@ -402,9 +439,20 @@ module Datadog
       def handle_validation_error(error)
         case @validation_mode
         when :strict
+          # Only show colored output if not in test and colored2 is available
+          if Datadog::Statsd::Schema.in_test
+            warn "Schema Validation Error: #{error.message}"
+          else
+            warn "Schema Validation Error:\n • ".yellow + error.message.to_s.red
+          end
           raise error
         when :warn
-          warn "Schema validation warning: #{error.message}"
+          # Only show colored output if not in test and colored2 is available
+          if Datadog::Statsd::Schema.in_test
+            warn "Schema Validation Warning: #{error.message}"
+          else
+            warn "Schema Validation Warning:\n • ".yellow + error.message.to_s.bold.yellow
+          end
           nil # Continue execution
         when :drop
           :drop # Signal to drop the metric

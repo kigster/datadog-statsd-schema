@@ -27,6 +27,12 @@ module Datadog
       class Error < StandardError
       end
 
+      class << self
+        attr_accessor :in_test
+      end
+
+      self.in_test = false
+
       # Create a new schema definition
       def self.new(&)
         builder = SchemaBuilder.new
