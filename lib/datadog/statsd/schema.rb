@@ -9,12 +9,12 @@ require_relative "schema/tag_definition"
 require_relative "schema/metric_definition"
 require_relative "schema/namespace"
 require_relative "schema/schema_builder"
-require_relative "schema/emitter"
+require_relative "emitter"
 
 module Datadog
   class << self
     def emitter(...)
-      ::Datadog::Statsd::Schema::Emitter.new(...)
+      ::Datadog::Statsd::Emitter.new(...)
     end
 
     def schema(...)
