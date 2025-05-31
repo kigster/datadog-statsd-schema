@@ -1,3 +1,5 @@
+[![Ruby](https://github.com/kigster/datadog-statsd-schema/actions/workflows/ruby.yml/badge.svg)](https://github.com/kigster/datadog-statsd-schema/actions/workflows/ruby.yml)
+
 # Datadog::Statsd::Schema
 
 ## Introduction
