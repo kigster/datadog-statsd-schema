@@ -54,13 +54,13 @@ This is the most straightforward way of using this gem. You can just pass your m
   )
 ```
 
-As you can see, the API is identical to that of `Datadog::Statsd`. The main difference is that, if you provide a schema argument, then the metric `marathon.started.total` must be pre-declared using the schema DSL language. In addition, metric type ("count"), and all of the tags and their possible values must be predeclared in the schema. Schema does support opening up a tag to any number of values, but that is not recommended.
+As you can see, the API is identical to `Datadog::Statsd`. The main difference is that, if you provide a schema argument, the metric `marathon.started.total` must be pre-declared using the schema DSL language. In addition, the metric type ("count") and all of the tags and their possible values must be predeclared in the schema. Schema does support opening up a tag to any number of values, but that is not recommended.
 
-So let's look at a more elaborate use-case.
+So let's look at a more elaborate use case.
 
 ### Defining Schema 
 
-Below is an example where we configure the gem by creating a schema using the provided DSL. This can be a single global schema or assigned to a specific Statsd Sender, although you can have any number of Senders of type `Datadog::Statsd::Emitter` that map to a new connection and new defaults.
+Below is an example of configuring the gem by creating a schema using the provided DSL. This can be a single global schema or assigned to a specific Statsd Sender, although you can have any number of Senders of type `Datadog::Statsd::Emitter` that map to a new connection and new defaults.
 
 ```ruby
   require 'etc'
@@ -149,7 +149,7 @@ Below is an example where we configure the gem by creating a schema using the pr
   my_sender.distribution('finished.duration', 35.09, tags: { sponsorship: "redbull" })
 ```
 
-You can provide a more specific prefix, which would be unnecessary when declaring the metric name. In  both cases, the Schema will validate that the metrics named `marathonfinished.total` and `marathon.finished.duration` are appropriately defined.
+In this case, the schema will validate that the metrics are named `marathon.finished.total` and `marathon.finished.duration`, and that their tags are appropriately defined.
 
 ```ruby
   finish_sender = Datadog.emitter(
@@ -175,6 +175,15 @@ $statsd.distribution(
   tags: { marathon_type: :full, course: "san-francisco" }
 )
 ```
+
+### Validation Mode
+
+There are four validation modes you can pass to an emitter to accompany a schema:
+
+1. `:strict` — raise an exception when anything is out of the ordinary is passed
+2. `:warn` — print to stderr and continue 
+3. `:drop` — drop this metric
+4. `:off` — no validation, as if schema was not even passed.
 
 ### An Example Tracking Web Performance
 
