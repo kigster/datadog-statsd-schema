@@ -1,12 +1,29 @@
 # frozen_string_literal: true
 
-require "bundler/gem_tasks"
-require "rspec/core/rake_task"
+require 'bundler/gem_tasks'
+require 'rspec/core/rake_task'
+require 'timeout'
+
+def shell(*args)
+  puts "running: #{args.join(' ')}"
+  system(args.join(' '))
+end
+
+task :clean do
+  shell('rm -rf pkg/ tmp/ coverage/ doc/ ' )
+end
+
+task gem: [:build] do
+  shell('gem install pkg/*')
+end
+
+task permissions: [:clean] do
+  shell("chmod -v o+r,g+r * */* */*/* */*/*/* */*/*/*/* */*/*/*/*/*")
+  shell("find . -type d -exec chmod o+x,g+x {} \\;")
+end
+
+task build: :permissions
 
 RSpec::Core::RakeTask.new(:spec)
 
-require "rubocop/rake_task"
-
-RuboCop::RakeTask.new
-
-task default: %i[spec rubocop]
+task default: :spec
