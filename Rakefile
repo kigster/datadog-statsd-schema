@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
-require 'bundler/gem_tasks'
-require 'rspec/core/rake_task'
-require 'timeout'
+require "bundler/gem_tasks"
+require "rspec/core/rake_task"
+require "timeout"
 
 def shell(*args)
-  puts "running: #{args.join(' ')}"
-  system(args.join(' '))
+  puts "running: #{args.join(" ")}"
+  system(args.join(" "))
 end
 
 task :clean do
-  shell('rm -rf pkg/ tmp/ coverage/ doc/ ' )
+  shell("rm -rf pkg/ tmp/ coverage/ doc/ ")
 end
 
 task gem: [:build] do
-  shell('gem install pkg/*')
+  shell("gem install pkg/*")
 end
 
 task permissions: [:clean] do
