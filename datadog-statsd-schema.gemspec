@@ -40,6 +40,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "dry-validation"
 
   # Development dependencies
+  spec.add_development_dependency "rspec"
   spec.add_development_dependency "rspec-its"
 
   # For more information and examples about making a new gem, check out our

@@ -95,15 +95,17 @@ module Datadog
 
         # Get all metrics recursively including from nested namespaces
         def all_metrics(path = [])
+          # Filter out :root from the path to avoid it appearing in metric names
           current_path = path + [name]
+          filtered_path = current_path.reject { |part| part == :root }
           result = {}
 
           # Add metrics from this namespace
           metrics.each do |_metric_name, metric_def|
-            full_metric_name = metric_def.full_name(current_path)
+            full_metric_name = metric_def.full_name(filtered_path)
             result[full_metric_name] = {
               definition: metric_def,
-              namespace_path: current_path,
+              namespace_path: filtered_path,
               namespace: self
             }
           end

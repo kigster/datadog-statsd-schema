@@ -140,6 +140,9 @@ GEM
     rubocop-ast (1.44.1)
       parser (>= 3.3.7.2)
       prism (~> 1.4)
+    rubocop-rspec (3.6.0)
+      lint_roller (~> 1.1)
+      rubocop (~> 1.72, >= 1.72.1)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
     simplecov (0.22.0)
@@ -159,8 +162,8 @@ GEM
 
 PLATFORMS
   ruby
+  ubuntu-unknown
   x86_64-linux
-  ubuntu-24.04-x64
 
 DEPENDENCIES
   datadog-statsd-schema!
@@ -169,6 +172,7 @@ DEPENDENCIES
   rspec
   rspec-its
   rubocop (~> 1.21)
+  rubocop-rspec
   simplecov
 
 BUNDLED WITH

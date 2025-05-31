@@ -394,14 +394,14 @@ module Datadog
           end
 
           context "with custom parent path" do
-            subject { api_namespace.all_metrics(%i[root web]) }
+            subject { api_namespace.all_metrics(%i[web]) }
 
-            its(:keys) { is_expected.to eq(["root.web.api.requests"]) }
+            its(:keys) { is_expected.to eq(["web.api.requests"]) }
 
             describe "metric namespace path" do
-              subject { api_namespace.all_metrics(%i[root web])["root.web.api.requests"] }
+              subject { api_namespace.all_metrics(%i[web])["web.api.requests"] }
 
-              its([:namespace_path]) { is_expected.to eq(%i[root web api]) }
+              its([:namespace_path]) { is_expected.to eq(%i[web api]) }
             end
           end
         end
