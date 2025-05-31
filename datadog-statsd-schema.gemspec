@@ -32,8 +32,15 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   # Uncomment to register a new dependency of your gem
-  spec.add_dependency 'dogstatsd-ruby'
   spec.add_dependency 'activesupport'
+  spec.add_dependency 'dogstatsd-ruby'
+  spec.add_dependency 'dry-schema'
+  spec.add_dependency 'dry-struct'
+  spec.add_dependency 'dry-types'
+  spec.add_dependency 'dry-validation'
+
+  # Development dependencies
+  spec.add_development_dependency 'rspec-its'
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
