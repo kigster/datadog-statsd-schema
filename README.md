@@ -135,6 +135,7 @@ Below is an example where we configure the gem by creating a schema using the pr
 
   my_sender = Datadog.emitter(
     schema: schema,
+    validation_mode: :strict,
     tags: { marathon_type: :full, course: "san-francisco" }
   )
 
@@ -151,6 +152,8 @@ You can provide a more specific prefix, which would be unnecessary when declarin
 
 ```ruby
   finish_sender = Datadog.emitter(
+    schema: schema,
+    validation_mode: :warn,
     metric: "marathon.finished", 
     tags: { marathon_type: :full, course: "san-francisco" }
   )
@@ -270,7 +273,7 @@ Keep metric name list short, eg: "emails.queued", "emails.sent", "emails.deliver
 ```ruby
 
     emails_emitter = Datadog.emitter(
-      self, 
+      self,
       metric: 'emails'
     )
 
