@@ -6,19 +6,21 @@ module Datadog
   class Statsd
     module Schema
       RSpec.describe TagDefinition do
-        describe "initialization" do
-          it "creates a tag definition with required name" do
-            tag = described_class.new(name: :controller)
-            expect(tag.name).to eq(:controller)
-            expect(tag.type).to eq(:string)
-            expect(tag.transform).to eq([])
-            expect(tag.values).to be_nil
-            expect(tag.validate).to be_nil
+        subject { described_class }
+
+        describe ".new" do
+          context "with required name only" do
+            subject { described_class.new(name: :controller) }
+
+            its(:name) { is_expected.to eq(:controller) }
+            its(:type) { is_expected.to eq(:string) }
+            its(:transform) { is_expected.to eq([]) }
+            its(:values) { is_expected.to be_nil }
+            its(:validate) { is_expected.to be_nil }
           end
 
-          it "accepts all optional attributes" do
-            custom_validator = ->(val) { val.length > 3 }
-            tag =
+          context "with all optional attributes" do
+            subject do
               described_class.new(
                 name: :status_code,
                 values: [200, 404, 500],
@@ -26,56 +28,108 @@ module Datadog
                 transform: %i[downcase underscore],
                 validate: custom_validator
               )
+            end
 
-            expect(tag.name).to eq(:status_code)
-            expect(tag.values).to eq([200, 404, 500])
-            expect(tag.type).to eq(:integer)
-            expect(tag.transform).to eq(%i[downcase underscore])
-            expect(tag.validate).to eq(custom_validator)
+            let(:custom_validator) { ->(val) { val.length > 3 } }
+
+            its(:name) { is_expected.to eq(:status_code) }
+            its(:values) { is_expected.to eq([200, 404, 500]) }
+            its(:type) { is_expected.to eq(:integer) }
+            its(:transform) { is_expected.to eq(%i[downcase underscore]) }
+            its(:validate) { is_expected.to eq(custom_validator) }
           end
         end
 
         describe "#allows_value?" do
+          subject { tag.allows_value?(value) }
+
           context "with no value restrictions" do
             let(:tag) { described_class.new(name: :any_tag) }
 
-            it "allows any value" do
-              expect(tag.allows_value?("anything")).to be true
-              expect(tag.allows_value?(123)).to be true
-              expect(tag.allows_value?(:symbol)).to be true
+            context "with string value" do
+              let(:value) { "anything" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with integer value" do
+              let(:value) { 123 }
+
+              it { is_expected.to be true }
+            end
+
+            context "with symbol value" do
+              let(:value) { :symbol }
+
+              it { is_expected.to be true }
             end
           end
 
           context "with array values" do
             let(:tag) { described_class.new(name: :method, values: %w[get post put]) }
 
-            it "allows values in the array" do
-              expect(tag.allows_value?("get")).to be true
-              expect(tag.allows_value?("post")).to be true
+            context "with allowed string value" do
+              let(:value) { "get" }
+
+              it { is_expected.to be true }
             end
 
-            it "allows symbol/string variations" do
-              expect(tag.allows_value?(:get)).to be true
-              expect(tag.allows_value?("get")).to be true
+            context "with another allowed string value" do
+              let(:value) { "post" }
+
+              it { is_expected.to be true }
             end
 
-            it "rejects values not in array" do
-              expect(tag.allows_value?("delete")).to be false
-              expect(tag.allows_value?("patch")).to be false
+            context "with allowed symbol value" do
+              let(:value) { :get }
+
+              it { is_expected.to be true }
+            end
+
+            context "with allowed value as string when symbol provided" do
+              let(:value) { "get" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with disallowed string value" do
+              let(:value) { "delete" }
+
+              it { is_expected.to be false }
+            end
+
+            context "with another disallowed value" do
+              let(:value) { "patch" }
+
+              it { is_expected.to be false }
             end
           end
 
           context "with regexp values" do
             let(:tag) { described_class.new(name: :controller, values: /^[a-z_]+$/) }
 
-            it "allows matching values" do
-              expect(tag.allows_value?("home_controller")).to be true
-              expect(tag.allows_value?("users")).to be true
+            context "with matching snake_case value" do
+              let(:value) { "home_controller" }
+
+              it { is_expected.to be true }
             end
 
-            it "rejects non-matching values" do
-              expect(tag.allows_value?("HomeController")).to be false
-              expect(tag.allows_value?("123invalid")).to be false
+            context "with matching lowercase value" do
+              let(:value) { "users" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with non-matching PascalCase value" do
+              let(:value) { "HomeController" }
+
+              it { is_expected.to be false }
+            end
+
+            context "with non-matching numeric value" do
+              let(:value) { "123invalid" }
+
+              it { is_expected.to be false }
             end
           end
 
@@ -84,16 +138,35 @@ module Datadog
               described_class.new(name: :score, values: ->(val) { val.to_i.between?(0, 100) })
             end
 
-            it "uses proc for validation" do
-              expect(tag.allows_value?(50)).to be true
-              expect(tag.allows_value?("75")).to be true
-              expect(tag.allows_value?(150)).to be false
-              expect(tag.allows_value?(-10)).to be false
+            context "with valid integer in range" do
+              let(:value) { 50 }
+
+              it { is_expected.to be true }
+            end
+
+            context "with valid string number in range" do
+              let(:value) { "75" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with integer above range" do
+              let(:value) { 150 }
+
+              it { is_expected.to be false }
+            end
+
+            context "with integer below range" do
+              let(:value) { -10 }
+
+              it { is_expected.to be false }
             end
           end
         end
 
         describe "#transform_value" do
+          subject { tag.transform_value(input_value, transformers) }
+
           let(:transformers) do
             {
               downcase: ->(val) { val.to_s.downcase },
@@ -103,60 +176,79 @@ module Datadog
 
           context "with no transformations" do
             let(:tag) { described_class.new(name: :simple) }
+            let(:input_value) { "SomeValue" }
 
-            it "returns value unchanged" do
-              expect(tag.transform_value("SomeValue", transformers)).to eq("SomeValue")
-            end
+            it { is_expected.to eq("SomeValue") }
           end
 
           context "with single transformation" do
             let(:tag) { described_class.new(name: :controller, transform: [:downcase]) }
+            let(:input_value) { "HomeController" }
 
-            it "applies transformation" do
-              expect(tag.transform_value("HomeController", transformers)).to eq("homecontroller")
-            end
+            it { is_expected.to eq("homecontroller") }
           end
 
           context "with chained transformations" do
             let(:tag) { described_class.new(name: :controller, transform: %i[underscore downcase]) }
+            let(:input_value) { "HomeController" }
 
-            it "applies transformations in order" do
-              expect(tag.transform_value("HomeController", transformers)).to eq("home_controller")
-            end
+            it { is_expected.to eq("home_controller") }
           end
 
           context "with missing transformer" do
             let(:tag) { described_class.new(name: :controller, transform: [:missing_transformer]) }
+            let(:input_value) { "SomeValue" }
 
-            it "skips missing transformers" do
-              expect(tag.transform_value("SomeValue", transformers)).to eq("SomeValue")
-            end
+            it { is_expected.to eq("SomeValue") }
           end
         end
 
         describe "#valid_value?" do
+          subject { tag.valid_value?(input_value, transformers) }
+
           let(:transformers) { { downcase: ->(val) { val.to_s.downcase } } }
 
           context "with string type" do
             let(:tag) { described_class.new(name: :name, type: :string) }
 
-            it "accepts any value" do
-              expect(tag.valid_value?("test", transformers)).to be true
-              expect(tag.valid_value?(123, transformers)).to be true
+            context "with string value" do
+              let(:input_value) { "test" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with integer value" do
+              let(:input_value) { 123 }
+
+              it { is_expected.to be true }
             end
           end
 
           context "with integer type" do
             let(:tag) { described_class.new(name: :count, type: :integer) }
 
-            it "accepts integer values" do
-              expect(tag.valid_value?(123, transformers)).to be true
-              expect(tag.valid_value?("456", transformers)).to be true
+            context "with integer value" do
+              let(:input_value) { 123 }
+
+              it { is_expected.to be true }
             end
 
-            it "rejects non-integer values" do
-              expect(tag.valid_value?("abc", transformers)).to be false
-              expect(tag.valid_value?("12.5", transformers)).to be false
+            context "with numeric string value" do
+              let(:input_value) { "456" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with non-numeric string value" do
+              let(:input_value) { "abc" }
+
+              it { is_expected.to be false }
+            end
+
+            context "with decimal string value" do
+              let(:input_value) { "12.5" }
+
+              it { is_expected.to be false }
             end
           end
 
@@ -169,11 +261,28 @@ module Datadog
               )
             end
 
-            it "applies custom validation" do
-              expect(tag.valid_value?(200, transformers)).to be true
-              expect(tag.valid_value?(404, transformers)).to be true
-              expect(tag.valid_value?(50, transformers)).to be false
-              expect(tag.valid_value?(700, transformers)).to be false
+            context "with valid status code" do
+              let(:input_value) { 200 }
+
+              it { is_expected.to be true }
+            end
+
+            context "with another valid status code" do
+              let(:input_value) { 404 }
+
+              it { is_expected.to be true }
+            end
+
+            context "with status code below range" do
+              let(:input_value) { 50 }
+
+              it { is_expected.to be false }
+            end
+
+            context "with status code above range" do
+              let(:input_value) { 700 }
+
+              it { is_expected.to be false }
             end
           end
 
@@ -182,10 +291,22 @@ module Datadog
               described_class.new(name: :method, values: %w[get post put], transform: [:downcase])
             end
 
-            it "validates after transformation" do
-              expect(tag.valid_value?("GET", transformers)).to be true
-              expect(tag.valid_value?("POST", transformers)).to be true
-              expect(tag.valid_value?("DELETE", transformers)).to be false
+            context "with uppercase value that transforms to valid" do
+              let(:input_value) { "GET" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with mixed case value that transforms to valid" do
+              let(:input_value) { "POST" }
+
+              it { is_expected.to be true }
+            end
+
+            context "with uppercase value that transforms to invalid" do
+              let(:input_value) { "DELETE" }
+
+              it { is_expected.to be false }
             end
           end
         end
