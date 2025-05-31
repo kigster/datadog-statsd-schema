@@ -160,6 +160,7 @@ GEM
 PLATFORMS
   ruby
   x86_64-linux
+  ubuntu-24.04-x64
 
 DEPENDENCIES
   datadog-statsd-schema!
