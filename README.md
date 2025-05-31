@@ -163,12 +163,12 @@ The above code will transmit the following metric, with the following tags:
 ```ruby
 $statsd.increment(
   "marathon.finished.total", 
-  tags: { marathon:type: :full, course: "san-francisco" }
+  tags: { marathon_type: :full, course: "san-francisco" }
 )
 
 $statsd.distribution(
   "marathon.finished.duration", 
-  tags: { marathon:type: :full, course: "san-francisco" }
+  tags: { marathon_type: :full, course: "san-francisco" }
 )
 ```
 
