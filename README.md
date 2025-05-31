@@ -33,13 +33,23 @@ Below is an example where we configure the gem by creating a schema using the pr
 
 ```ruby
   require 'datadog/statsd'
+  require 'etc'
+  require 'git'
+
   $statsd = ::Datadog::Statsd.new(
     'localhost', 8125, 
     delay_serialization: true
   )
-
+  
   Datadog::Statsd::Schema.configure do |config|
     config.statsd = $statsd
+
+    # This configures the global tags that will be attached to all methods
+    config.tags = { 
+      env: "development",
+      arch: Etc.uname[:machine],
+      version: Git.open('.').object('HEAD').sha
+    }
 
     config.schema = Datadog::Statsd::Schema.new do
       # Transformers can be attached to the tags, and apply before the tags are submitted
@@ -54,7 +64,7 @@ Below is an example where we configure the gem by creating a schema using the pr
           tag :course, values: ["san francisco", "boston", "new york"]
           tag :marathon_type, values: %w[half full]
           tag :status, values: %w[finished no-show incomplete]
-          tag :sponsorship, values: %w[sponsored unsponsored]
+          tag :sponsorship, values: %w[nike cocacola redbull]
         end
 
         metrics do 
@@ -91,13 +101,13 @@ Below is an example where we configure the gem by creating a schema using the pr
     tags: { marathon_type: :full, course: "san-francisco" }
   )
 
-  my_sender.increment('started.total', by: 43_579)
+  my_sender.increment('started.total', by: 43579) # register all participants at start
   # time passes, first runners start to arrive
-  my_sender.increment('finished.total')
-  my_sender.distribution('finished.duration', 43.21)
+  my_sender.increment('finished.total') # register one at a time
+  my_sender.distribution('finished.duration', 33.21, tags: { sponsorship: 'nike' })
   ... 
   my_sender.increment('finished.total')
-  my_sender.distribution('finished.duration', 74.32)
+  my_sender.distribution('finished.duration', 35.09, tags: { sponsorship: "redbull" })
 ```
 
 You can provide a more specific prefix, which would then be unnecessary when declaring the metric name. In  both cases, the Schema will validate that the metric named
@@ -112,36 +122,42 @@ You can provide a more specific prefix, which would then be unnecessary when dec
   finish.distribution('duration', 34)
 ```      
 
-
-### Example Tracking Web Performance
-
+### An Example Tracking Web Performance
 
 ```ruby
  Datadog::Statsd::Schema.configure do |config|
     config.statsd = $statsd
     config.schema = Datadog::Statsd::Schema.new do
       namespace "web" do
-        tags do
-          tag :controller, 
-              values: %r{[a-z.]*}, 
-              transform: [ :underscore, :downcase ]
+        namespace "request" do
+          tags do
+            tag :uri,
+                values: %r{.*}
 
-          tag :action, 
-              values: %r{[a-z.]*}, 
-              transform: [ :underscore, :downcase ]
+            tag :logged_in,
+                values: %w[logged_in logged_out]
 
-          tag :method, 
-              values: %i[get post put patch delete head options trace connect], 
-              transform: [ :downcase ]
+            tag :billing_plan,
+                values: %w[premium trial free]
 
-          tag :status_code, 
-              type: :integer, 
-              validate: ->(code) { (100..599).include?(code) }
-        end
+            tag :controller, 
+                values: %r{[a-z.]*}, 
+                transform: [ :underscore, :downcase ]
 
-        metrics do
-          namespace "request" do
+            tag :action, 
+                values: %r{[a-z.]*}, 
+                transform: [ :underscore, :downcase ]
 
+            tag :method, 
+                values: %i[get post put patch delete head options trace connect], 
+                transform: [ :downcase ]
+
+            tag :status_code, 
+                type: :integer, 
+                validate: ->(code) { (100..599).include?(code) }
+          end
+          
+          metrics do
             # This distribution allows tracking of the latency of the request.
             distribution :duration do
               description "HTTP request processing time in milliseconds"
@@ -158,6 +174,21 @@ You can provide a more specific prefix, which would then be unnecessary when dec
       end
     end
   end
+
+  # Let's say this monitor only tracks requests from logged in premium users, 
+  # then you can provide those tags here, and they will be sent together with
+  # individual invocations:
+  traffic_monitor = Datadog::Statsd::Sender.new(
+    self,
+    prefix: "web.request", 
+    tags: { billing_plan: :premium, logged_in: :logged_in }
+  )
+
+  my_sender.increment('total', uri: '/home/settings') 
+  my_sender.distribution('duration', uri: '/home/settings') 
+
+  my_sender.increment('total', uri: '/app/calendar')
+  my_sender.distribution('duration', uri: '/app/calendar')
 ```
       
 
