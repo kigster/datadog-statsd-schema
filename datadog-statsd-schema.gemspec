@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name = 'datadog-statsd-schema'
   spec.version = Datadog::Statsd::Schema::VERSION
   spec.authors = ['Konstantin Gredeskoul']
-  spec.email = ['konstantin@academia.edu']
+  spec.email = ['kigster@gmail.com']
 
   spec.summary = 'Datadog Schema for Statsd metrics and Tags'
   spec.description = 'Datadog Schema for Statsd metrics and Tags'
@@ -33,6 +33,7 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   spec.add_dependency 'dogstatsd-ruby'
+  spec.add_dependency 'activesupport'
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

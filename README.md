@@ -29,7 +29,7 @@ So let's look at a more elaborate use-case.
 
 ### Defining Schema 
 
-Below is an example where we configure the gem by creating a schema using the provided DSL. This can be a single global schema or assigned to a specific Statsd Sender, although you can have any number of Senders of type `Datadog::Statsd::Sender` that map to a new connection and new defaults.
+Below is an example where we configure the gem by creating a schema using the provided DSL. This can be a single global schema or assigned to a specific Statsd Sender, although you can have any number of Senders of type `Datadog::Statsd::Schema::Emitter` that map to a new connection and new defaults.
 
 ```ruby
   require 'datadog/statsd'
@@ -91,12 +91,10 @@ Below is an example where we configure the gem by creating a schema using the pr
           end   
         end
       end
-
-      end
     end
   end
 
-  my_sender = Datadog::Statsd::Sender.new(
+  my_sender = Datadog::Statsd::Schema::Emitter.new(
     prefix: "marathon", 
     tags: { marathon_type: :full, course: "san-francisco" }
   )
@@ -114,7 +112,7 @@ You can provide a more specific prefix, which would then be unnecessary when dec
 `marathonfinished.total` and `marathon.finished.duration` are properly defined.
 
 ```ruby
-  finish_sender = Datadog::Statsd::Sender.new(
+  finish_sender = Datadog::Statsd::Schema::Emitter.new(
     prefix: "marathon.finished", 
     tags: { marathon_type: :full, course: "san-francisco" }
   )
@@ -174,11 +172,15 @@ You can provide a more specific prefix, which would then be unnecessary when dec
       end
     end
   end
+```
 
-  # Let's say this monitor only tracks requests from logged in premium users, 
-  # then you can provide those tags here, and they will be sent together with
-  # individual invocations:
-  traffic_monitor = Datadog::Statsd::Sender.new(
+
+Let's say this monitor only tracks requests from logged in premium users,  then you can provide those tags here, and they will be sent together with individual invocations:
+
+```ruby
+  # We'll use the shorthand version to create this Emitter.
+  # It's equivalent to *Datadog::Statsd::Schema::Emitter.new*
+  traffic_monitor = Datadog.emitter(
     self,
     prefix: "web.request", 
     tags: { billing_plan: :premium, logged_in: :logged_in }
@@ -205,6 +207,10 @@ If bundler is not being used to manage dependencies, install the gem by executin
 gem install datadog-statsd-schema
 ```
 
+## Usage
+
+1. Define your metrics and tagging schema
+2. Create as many "emitters" as necessary and start sending!
 
 ## Development
 
