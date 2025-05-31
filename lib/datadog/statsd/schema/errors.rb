@@ -9,7 +9,7 @@ module Datadog
         def initialize(namespace, metric_name)
           super(
             "Unknown metric '#{namespace}.#{metric_name}'. " \
-            'Please define it in your schema first.'
+            "Please define it in your schema first."
           )
         end
       end
@@ -18,7 +18,7 @@ module Datadog
         def initialize(metric_name, tag_name, allowed_tags)
           super(
             "Invalid tag '#{tag_name}' for metric '#{metric_name}'. " \
-            "Allowed tags: #{allowed_tags.join(', ')}"
+            "Allowed tags: #{allowed_tags.join(", ")}"
           )
         end
       end
@@ -27,7 +27,7 @@ module Datadog
         def initialize(metric_name, required_tag, required_tags)
           super(
             "Missing required tag '#{required_tag}' for metric '#{metric_name}'. " \
-            "Required tags: #{required_tags.join(', ')}"
+            "Required tags: #{required_tags.join(", ")}"
           )
         end
       end
@@ -51,7 +51,7 @@ module Datadog
         def initialize(namespace)
           super(
             "Unknown namespace '#{namespace}'. " \
-            'Please define it in your schema first.'
+            "Please define it in your schema first."
           )
         end
       end

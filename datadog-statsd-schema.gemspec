@@ -1,22 +1,22 @@
 # frozen_string_literal: true
 
-require_relative 'lib/datadog/statsd/schema/version'
+require_relative "lib/datadog/statsd/schema/version"
 
 Gem::Specification.new do |spec|
-  spec.name = 'datadog-statsd-schema'
+  spec.name = "datadog-statsd-schema"
   spec.version = Datadog::Statsd::Schema::VERSION
-  spec.authors = ['Konstantin Gredeskoul']
-  spec.email = ['kigster@gmail.com']
+  spec.authors = ["Konstantin Gredeskoul"]
+  spec.email = ["kigster@gmail.com"]
 
-  spec.summary = 'Datadog Schema for Statsd metrics and Tags'
-  spec.description = 'Datadog Schema for Statsd metrics and Tags'
-  spec.homepage = 'https://github.com/kigster/datadog-statsd-schema'
-  spec.license = 'MIT'
-  spec.required_ruby_version = '>= 3.1.0'
+  spec.summary = "Datadog Schema for Statsd metrics and Tags"
+  spec.description = "Datadog Schema for Statsd metrics and Tags"
+  spec.homepage = "https://github.com/kigster/datadog-statsd-schema"
+  spec.license = "MIT"
+  spec.required_ruby_version = ">= 3.1.0"
 
-  spec.metadata['homepage_uri'] = spec.homepage
-  spec.metadata['source_code_uri'] = 'https://github.com/kigster/datadog-statsd-schema'
-  spec.metadata['changelog_uri'] = 'https://github.com/kigster/datadog-statsd-schema'
+  spec.metadata["homepage_uri"] = spec.homepage
+  spec.metadata["source_code_uri"] = "https://github.com/kigster/datadog-statsd-schema"
+  spec.metadata["changelog_uri"] = "https://github.com/kigster/datadog-statsd-schema"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
@@ -27,15 +27,22 @@ Gem::Specification.new do |spec|
         f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
     end
   end
-  spec.bindir = 'exe'
+  spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
-  spec.require_paths = ['lib']
+  spec.require_paths = ["lib"]
 
   # Uncomment to register a new dependency of your gem
-  spec.add_dependency 'dogstatsd-ruby'
-  spec.add_dependency 'activesupport'
+  spec.add_dependency "activesupport"
+  spec.add_dependency "dogstatsd-ruby"
+  spec.add_dependency "dry-schema"
+  spec.add_dependency "dry-struct"
+  spec.add_dependency "dry-types"
+  spec.add_dependency "dry-validation"
+
+  # Development dependencies
+  spec.add_development_dependency "rspec-its"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
-  spec.metadata['rubygems_mfa_required'] = 'true'
+  spec.metadata["rubygems_mfa_required"] = "true"
 end
