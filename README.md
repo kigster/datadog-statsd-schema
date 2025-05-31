@@ -134,6 +134,7 @@ Below is an example where we configure the gem by creating a schema using the pr
   end
 
   my_sender = Datadog.emitter(
+    metric: 'marathon',
     schema: schema,
     validation_mode: :strict,
     tags: { marathon_type: :full, course: "san-francisco" }
