@@ -36,5 +36,5 @@ jobs:
     - name: Run RSpec
       run: bundle exec rspec --format documentation
     - name: Run Rubocop
-      run: bundle exec rubocop --format documentation
+      run: bundle exec rubocop
 
