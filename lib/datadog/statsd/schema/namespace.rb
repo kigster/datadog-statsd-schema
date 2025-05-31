@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'dry-struct'
-require 'dry-types'
-require_relative 'tag_definition'
-require_relative 'metric_definition'
+require "dry-struct"
+require "dry-types"
+require_relative "tag_definition"
+require_relative "metric_definition"
 
 module Datadog
   class Statsd
@@ -102,9 +102,9 @@ module Datadog
           metrics.each do |_metric_name, metric_def|
             full_metric_name = metric_def.full_name(current_path)
             result[full_metric_name] = {
-              definition:     metric_def,
+              definition: metric_def,
               namespace_path: current_path,
-              namespace:      self
+              namespace: self
             }
           end
 
@@ -128,16 +128,12 @@ module Datadog
           metrics.each do |metric_name, metric_def|
             # Check allowed tags
             metric_def.allowed_tags.each do |tag_name|
-              unless has_tag?(tag_name)
-                errors << "Metric #{metric_name} references unknown tag: #{tag_name}"
-              end
+              errors << "Metric #{metric_name} references unknown tag: #{tag_name}" unless has_tag?(tag_name)
             end
 
             # Check required tags
             metric_def.required_tags.each do |tag_name|
-              unless has_tag?(tag_name)
-                errors << "Metric #{metric_name} requires unknown tag: #{tag_name}"
-              end
+              errors << "Metric #{metric_name} requires unknown tag: #{tag_name}" unless has_tag?(tag_name)
             end
           end
 
@@ -151,7 +147,7 @@ module Datadog
 
         # Find metric by path (e.g., "request.duration" within web namespace)
         def find_metric_by_path(path)
-          parts = path.split('.')
+          parts = path.split(".")
 
           if parts.length == 1
             # Single part, look for metric in this namespace
@@ -159,7 +155,7 @@ module Datadog
           else
             # Multiple parts, navigate to nested namespace
             namespace_name = parts.first
-            remaining_path = parts[1..-1].join('.')
+            remaining_path = parts[1..-1].join(".")
 
             nested_namespace = find_namespace(namespace_name)
             return nil unless nested_namespace
@@ -172,13 +168,13 @@ module Datadog
         def find_namespace_by_path(path)
           return self if path.empty?
 
-          parts = path.split('.')
+          parts = path.split(".")
 
           if parts.length == 1
             find_namespace(parts.first)
           else
             namespace_name = parts.first
-            remaining_path = parts[1..-1].join('.')
+            remaining_path = parts[1..-1].join(".")
 
             nested_namespace = find_namespace(namespace_name)
             return nil unless nested_namespace

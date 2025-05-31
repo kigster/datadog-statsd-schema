@@ -4,15 +4,15 @@
 
 This is an extension to gem [dogstatsd-ruby](https://github.com/DataDog/dogstatsd-ruby) which enhances the original with a robust schema definition for both the custom metrics being sent, and the tags allowed (or required) to attach to the metric. 
 
-There are two interfaces to `Datadog::Statsd` instance — you can use the class methods of `Datadog::Statsd::Schema`, and pass the typical statsd methods. But you can also use an instance of this class, which adds a number of features and powerful shortcuts.
+There are two interfaces to `Datadog::Statsd` instance — you can use the class methods of `Datadog::Statsd::Emitter`, and pass the typical statsd methods. But you can also use an instance of this class, which adds a number of features and powerful shortcuts.
 
 ### Class Methods
 
 This is the most straightforward way of using this gem. You can just pass your metric names and tags to the standard operations on Statsd, just like so:
 
 ```ruby
-  Datadog::Statsd::Schema.increment(
-    'marathon.started', 
+  Datadog::Statsd::Emitter.increment(
+    'marathon.started.total', 
     by: 7, 
     tags: { 
         course: "sf-marathon", 
@@ -23,7 +23,7 @@ This is the most straightforward way of using this gem. You can just pass your m
   )
 ```
 
-As you can see, the API is identical to that of `Datadog::Statsd`. The main difference is that, if you provide a schema argument, then the metric `marathon.started` must be pre-declared using the schema DSL language. In addition, metric type ("count"), and all of the tags and their possible values must be predeclared in the schema. Schema does support opening up a tag to any number of values, but that is not recommended.
+As you can see, the API is identical to that of `Datadog::Statsd`. The main difference is that, if you provide a schema argument, then the metric `marathon.started.total` must be pre-declared using the schema DSL language. In addition, metric type ("count"), and all of the tags and their possible values must be predeclared in the schema. Schema does support opening up a tag to any number of values, but that is not recommended.
 
 So let's look at a more elaborate use-case.
 
@@ -61,7 +61,10 @@ Below is an example where we configure the gem by creating a schema using the pr
 
       namespace :marathon do
         tags do
-          tag :course, values: ["san francisco", "boston", "new york"]
+          tag :course, 
+              values: ["san francisco", "boston", "new york"],         
+              transform: %i[downcase underscore],
+
           tag :marathon_type, values: %w[half full]
           tag :status, values: %w[finished no-show incomplete]
           tag :sponsorship, values: %w[nike cocacola redbull]
@@ -118,7 +121,21 @@ You can provide a more specific prefix, which would then be unnecessary when dec
   )
   finish.increment('total')
   finish.distribution('duration', 34)
-```      
+```
+
+The above code will transmit the following metric, with the following tags:
+
+```ruby
+$statsd.increment(
+  "marathon.finished.total", 
+  tags: { marathon:type: :full, course: "san-francisco" }
+)
+
+$statsd.distribution(
+  "marathon.finished.duration", 
+  tags: { marathon:type: :full, course: "san-francisco" }
+)
+```
 
 ### An Example Tracking Web Performance
 
@@ -186,13 +203,16 @@ Let's say this monitor only tracks requests from logged in premium users,  then 
     tags: { billing_plan: :premium, logged_in: :logged_in }
   )
 
-  my_sender.increment('total', uri: '/home/settings') 
-  my_sender.distribution('duration', uri: '/home/settings') 
+  my_sender.increment('total', tags: { uri: '/home/settings', method: :get } ) 
+  my_sender.distribution('duration', tags: { uri: '/home/settings', method: :get } ) 
 
-  my_sender.increment('total', uri: '/app/calendar')
-  my_sender.distribution('duration', uri: '/app/calendar')
+  my_sender.increment('total', tags: { uri: '/app/calendar', method: :post} )
+  my_sender.distribution('duration', tags: { uri: '/app/calendar', method: :post } )
 ```
       
+The above code will send two metrics: `web.request.total` as a counter, tagged with: `{ billing_plan: :premium, logged_in: :logged_in, uri: '/home/settings' }` and the second time for the `uri: '/app/calendar'`. 
+
+
 
 ## Installation
 

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'forwardable'
-require 'datadog/statsd'
-require 'ostruct'
+require "forwardable"
+require "datadog/statsd"
+require "ostruct"
 
 module Datadog
   class Statsd
@@ -70,9 +70,9 @@ module Datadog
       #   login_statsd.increment(ab_test: { "login_test_2025" => "variant_01" })
       #
       class Emitter
-        MUTEX ||= Mutex.new
+        MUTEX = Mutex.new
 
-        DEFAULT_HOST = '127.0.0.1'
+        DEFAULT_HOST = "127.0.0.1"
         DEFAULT_PORT = 8125
         DEFAULT_NAMESPACE = nil
         DEFAULT_ARGUMENTS = { delay_serialization: true }
@@ -89,9 +89,7 @@ module Datadog
           # @return [Datadog::Statsd, NilClass] The Datadog Statsd client instance or nil if not
           #     currently connected.
           def statsd
-            unless defined?(@datadog_statsd)
-              @datadog_statsd = connect
-            end
+            @datadog_statsd = connect unless defined?(@datadog_statsd)
             @datadog_statsd
           end
 
@@ -214,7 +212,7 @@ module Datadog
         def initialize(emitter = nil, metric: nil, tags: nil, ab_test: nil, sample_rate: nil)
           if emitter.nil? && metric.nil? && tags.nil? && ab_test.nil? && sample_rate.nil?
             raise ArgumentError,
-                  'Statsd::Schema::Emitter: use class methods if you are passing nothing to the constructor.'
+                  "Statsd::Schema::Emitter: use class methods if you are passing nothing to the constructor."
           end
 
           @sample_rate = sample_rate || 1.0
@@ -234,8 +232,8 @@ module Datadog
               emitter&.class&.name
             end
 
-          emitter = nil if emitter == 'Object'
-          emitter = emitter&.gsub('::', '.')&.underscore&.downcase
+          emitter = nil if emitter == "Object"
+          emitter = emitter&.gsub("::", ".")&.underscore&.downcase
 
           return unless emitter
 
@@ -245,8 +243,8 @@ module Datadog
 
         def method_missing(m, *args, **opts, &)
           args, opts = normalize_arguments(*args, **opts)
-          if ENV.fetch('DATADOG_DEBUG', false)
-            warn "<CUSTOM METRIC to STATSD>: #{self}->#{m}(#{args.join(', ')}, #{opts.inspect})"
+          if ENV.fetch("DATADOG_DEBUG", false)
+            warn "<CUSTOM METRIC to STATSD>: #{self}->#{m}(#{args.join(", ")}, #{opts.inspect})"
           end
           statsd&.send(m, *args, **opts, &)
         end

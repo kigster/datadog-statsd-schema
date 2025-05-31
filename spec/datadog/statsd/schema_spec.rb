@@ -1,219 +1,341 @@
 # frozen_string_literal: true
 
-RSpec.describe Datadog::Statsd::Schema do
-  it 'has a version number' do
-    expect(Datadog::Statsd::Schema::VERSION).not_to be_nil
-  end
+require "spec_helper"
 
-  describe '.new' do
-    it 'creates a schema using the DSL' do
-      schema = described_class.new do
-        transformers do
-          downcase { |text| text.downcase }
+module Datadog
+  class Statsd
+    module Schema
+      RSpec.describe Schema do
+        subject { described_class }
+
+        describe "::VERSION" do
+          subject { described_class::VERSION }
+
+          it { is_expected.not_to be_nil }
         end
 
-        namespace :web do
-          tags do
-            tag :controller, values: %w[home users posts]
-            tag :action, values: %w[index show create]
+        describe ".new" do
+          subject { described_class }
+
+          context "when called with no block" do
+            subject { described_class.new }
+
+            its(:class) { is_expected.to eq(Datadog::Statsd::Schema::Namespace) }
+            its(:name) { is_expected.to eq(:root) }
+            its(:namespaces) { is_expected.to be_empty }
           end
 
-          metrics do
-            counter :page_views,
-                    description: 'Page view counter',
-                    tags: { allowed: %w[controller action], required: %w[controller] }
-          end
-        end
-      end
+          context "when called with DSL block" do
+            subject { described_class.new(&schema_block) }
 
-      expect(schema).to be_a(Datadog::Statsd::Schema::Namespace)
-      expect(schema.name).to eq(:root)
+            let(:schema_block) do
+              proc do
+                transformers { downcase { |text| text.downcase } }
 
-      web_ns = schema.find_namespace(:web)
-      expect(web_ns).not_to be_nil
-      expect(web_ns.find_tag(:controller)).not_to be_nil
-      expect(web_ns.find_metric(:page_views)).not_to be_nil
-    end
+                namespace :web do
+                  tags do
+                    tag :controller, values: %w[home users posts]
+                    tag :action, values: %w[index show create]
+                  end
 
-    it 'returns an empty schema when no block given' do
-      schema = described_class.new
-
-      expect(schema).to be_a(Datadog::Statsd::Schema::Namespace)
-      expect(schema.name).to eq(:root)
-      expect(schema.namespaces).to be_empty
-    end
-  end
-
-  describe '.load_file' do
-    let(:schema_file_content) do
-      <<~RUBY
-        transformers do
-          downcase { |text| text.downcase }
-        end
-
-        namespace :web do
-          description 'Web metrics'
-        #{'  '}
-          tags do
-            tag :environment, values: %w[development production]
-          end
-
-          metrics do
-            counter :requests, tags: { required: %w[environment] }
-          end
-        end
-      RUBY
-    end
-
-    it 'loads schema from file content' do
-      allow(File).to receive(:read).with('schema.rb').and_return(schema_file_content)
-
-      schema = described_class.load_file('schema.rb')
-
-      expect(schema).to be_a(Datadog::Statsd::Schema::Namespace)
-      web_ns = schema.find_namespace(:web)
-      expect(web_ns.description).to eq('Web metrics')
-      expect(web_ns.find_tag(:environment)).not_to be_nil
-      expect(web_ns.find_metric(:requests)).not_to be_nil
-    end
-  end
-
-  describe '.configure' do
-    after do
-      # Reset configuration after each test
-      described_class.instance_variable_set(:@configuration, nil)
-    end
-
-    it 'yields configuration object' do
-      mock_statsd = double('statsd')
-      mock_schema = double('schema')
-
-      described_class.configure do |config|
-        config.statsd = mock_statsd
-        config.schema = mock_schema
-        config.tags = { env: 'test' }
-      end
-
-      config = described_class.configuration
-      expect(config.statsd).to eq(mock_statsd)
-      expect(config.schema).to eq(mock_schema)
-      expect(config.tags).to eq({ env: 'test' })
-    end
-  end
-
-  describe '.configuration' do
-    after do
-      # Reset configuration after each test
-      described_class.instance_variable_set(:@configuration, nil)
-    end
-
-    it 'returns configuration instance' do
-      config = described_class.configuration
-
-      expect(config).to be_a(Datadog::Statsd::Schema::Configuration)
-      expect(config.statsd).to be_nil
-      expect(config.schema).to be_nil
-      expect(config.tags).to eq({})
-    end
-
-    it 'returns same instance on multiple calls' do
-      config1 = described_class.configuration
-      config2 = described_class.configuration
-
-      expect(config1).to be(config2)
-    end
-  end
-
-  describe Datadog::Statsd::Schema::Configuration do
-    it 'has default values' do
-      config = described_class.new
-
-      expect(config.statsd).to be_nil
-      expect(config.schema).to be_nil
-      expect(config.tags).to eq({})
-    end
-
-    it 'allows setting values' do
-      config = described_class.new
-      mock_statsd = double('statsd')
-      mock_schema = double('schema')
-
-      config.statsd = mock_statsd
-      config.schema = mock_schema
-      config.tags = { region: 'us-east-1' }
-
-      expect(config.statsd).to eq(mock_statsd)
-      expect(config.schema).to eq(mock_schema)
-      expect(config.tags).to eq({ region: 'us-east-1' })
-    end
-  end
-
-  describe 'integration with README example' do
-    it 'supports the web performance tracking example from README' do
-      schema = described_class.new do
-        transformers do
-          underscore { |text| text.gsub(/([A-Z])/, '_\1').downcase.sub(/^_/, '') }
-          downcase { |text| text.downcase }
-        end
-
-        namespace :web do
-          namespace :request do
-            tags do
-              tag :uri, values: /.*/
-              tag :logged_in, values: %w[logged_in logged_out]
-              tag :billing_plan, values: %w[premium trial free]
-              tag :controller, values: /[a-z.]*/, transform: %i[underscore downcase]
-              tag :action, values: /[a-z.]*/, transform: %i[underscore downcase]
-              tag :method, values: %i[get post put patch delete head options trace connect], transform: [:downcase]
-              tag :status_code, type: :integer, validate: ->(code) { (100..599).include?(code) }
+                  metrics do
+                    counter :page_views,
+                            description: "Page view counter",
+                            tags: {
+                              allowed: %w[controller action],
+                              required: %w[controller]
+                            }
+                  end
+                end
+              end
             end
 
-            metrics do
-              distribution :duration do
-                description 'HTTP request processing time in milliseconds'
-                tags allowed: %w[controller action method status_code], required: %w[controller]
+            its(:class) { is_expected.to eq(Datadog::Statsd::Schema::Namespace) }
+            its(:name) { is_expected.to eq(:root) }
+
+            describe "web namespace" do
+              subject { described_class.new(&schema_block).find_namespace(:web) }
+
+              it { is_expected.not_to be_nil }
+
+              describe "controller tag" do
+                subject do
+                  described_class.new(&schema_block).find_namespace(:web).find_tag(:controller)
+                end
+
+                it { is_expected.not_to be_nil }
               end
 
-              counter :total do
-                description 'Total number of requests received'
-                tags allowed: %w[controller action method status_code], required: %w[controller]
+              describe "page_views metric" do
+                subject do
+                  described_class.new(&schema_block).find_namespace(:web).find_metric(:page_views)
+                end
+
+                it { is_expected.not_to be_nil }
               end
             end
           end
         end
+
+        describe ".load_file" do
+          subject { described_class.load_file("schema.rb") }
+
+          let(:schema_file_content) { <<~RUBY }
+            transformers do
+              downcase { |text| text.downcase }
+            end
+
+            namespace :web do
+              description 'Web metrics'
+            #{"  "}
+              tags do
+                tag :environment, values: %w[development production]
+              end
+
+              metrics do
+                counter :requests, tags: { required: %w[environment] }
+              end
+            end
+          RUBY
+
+          before { allow(File).to receive(:read).with("schema.rb").and_return(schema_file_content) }
+
+          its(:class) { is_expected.to eq(Datadog::Statsd::Schema::Namespace) }
+
+          describe "web namespace" do
+            subject { described_class.load_file("schema.rb").find_namespace(:web) }
+
+            before do
+              allow(File).to receive(:read).with("schema.rb").and_return(schema_file_content)
+            end
+
+            its(:description) { is_expected.to eq("Web metrics") }
+
+            describe "environment tag" do
+              subject do
+                described_class.load_file("schema.rb").find_namespace(:web).find_tag(:environment)
+              end
+
+              before do
+                allow(File).to receive(:read).with("schema.rb").and_return(schema_file_content)
+              end
+
+              it { is_expected.not_to be_nil }
+            end
+
+            describe "requests metric" do
+              subject do
+                described_class.load_file("schema.rb").find_namespace(:web).find_metric(:requests)
+              end
+
+              before do
+                allow(File).to receive(:read).with("schema.rb").and_return(schema_file_content)
+              end
+
+              it { is_expected.not_to be_nil }
+            end
+          end
+        end
+
+        describe ".configure" do
+          subject { described_class }
+
+          let(:mock_statsd) { double("statsd") }
+          let(:mock_schema) { double("schema") }
+          let(:test_tags) { { env: "test" } }
+
+          after { described_class.instance_variable_set(:@configuration, nil) }
+
+          it "yields configuration object" do
+            described_class.configure do |config|
+              config.statsd = mock_statsd
+              config.schema = mock_schema
+              config.tags = test_tags
+            end
+
+            config = described_class.configuration
+            expect(config.statsd).to eq(mock_statsd)
+            expect(config.schema).to eq(mock_schema)
+            expect(config.tags).to eq(test_tags)
+          end
+        end
+
+        describe ".configuration" do
+          subject { described_class.configuration }
+
+          after { described_class.instance_variable_set(:@configuration, nil) }
+
+          its(:class) { is_expected.to eq(Datadog::Statsd::Schema::Configuration) }
+          its(:statsd) { is_expected.to be_nil }
+          its(:schema) { is_expected.to be_nil }
+          its(:tags) { is_expected.to eq({}) }
+
+          context "when called multiple times" do
+            it "returns the same instance" do
+              config1 = described_class.configuration
+              config2 = described_class.configuration
+              expect(config1).to be(config2)
+            end
+          end
+        end
+
+        describe Datadog::Statsd::Schema::Configuration do
+          subject { described_class.new }
+
+          describe "default values" do
+            its(:statsd) { is_expected.to be_nil }
+            its(:schema) { is_expected.to be_nil }
+            its(:tags) { is_expected.to eq({}) }
+          end
+
+          describe "setting values" do
+            subject { described_class.new }
+
+            let(:mock_statsd) { double("statsd") }
+            let(:mock_schema) { double("schema") }
+            let(:test_tags) { { region: "us-east-1" } }
+
+            before do
+              subject.statsd = mock_statsd
+              subject.schema = mock_schema
+              subject.tags = test_tags
+            end
+
+            its(:statsd) { is_expected.to eq(mock_statsd) }
+            its(:schema) { is_expected.to eq(mock_schema) }
+            its(:tags) { is_expected.to eq(test_tags) }
+          end
+        end
+
+        describe "README integration example" do
+          subject { schema }
+
+          let(:schema) do
+            described_class.new do
+              transformers do
+                underscore { |text| text.gsub(/([A-Z])/, '_\1').downcase.sub(/^_/, "") }
+                downcase { |text| text.downcase }
+              end
+
+              namespace :web do
+                namespace :request do
+                  tags do
+                    tag :uri, values: /.*/
+                    tag :logged_in, values: %w[logged_in logged_out]
+                    tag :billing_plan, values: %w[premium trial free]
+                    tag :controller, values: /[a-z.]*/, transform: %i[underscore downcase]
+                    tag :action, values: /[a-z.]*/, transform: %i[underscore downcase]
+                    tag :method,
+                        values: %i[get post put patch delete head options trace connect],
+                        transform: [:downcase]
+                    tag :status_code,
+                        type: :integer,
+                        validate: ->(code) { (100..599).include?(code) }
+                  end
+
+                  metrics do
+                    distribution :duration,
+                                 description: "HTTP request processing time in milliseconds",
+                                 tags: {
+                                   allowed: %w[controller action method status_code],
+                                   required: %w[controller]
+                                 }
+
+                    counter :total,
+                            description: "Total number of requests received",
+                            tags: {
+                              allowed: %w[controller action method status_code],
+                              required: %w[controller]
+                            }
+                  end
+                end
+              end
+            end
+          end
+
+          let(:web_namespace) { schema.find_namespace(:web) }
+          let(:request_namespace) { web_namespace.find_namespace(:request) }
+
+          describe "schema structure" do
+            it { is_expected.to be_a(Datadog::Statsd::Schema::Namespace) }
+
+            describe "web namespace" do
+              subject { web_namespace }
+
+              it { is_expected.not_to be_nil }
+
+              describe "request namespace" do
+                subject { request_namespace }
+
+                it { is_expected.not_to be_nil }
+              end
+            end
+          end
+
+          describe "tag definitions" do
+            subject { request_namespace }
+
+            %i[controller action method status_code].each do |tag_name|
+              describe "#{tag_name} tag" do
+                subject { request_namespace.find_tag(tag_name) }
+
+                it { is_expected.not_to be_nil }
+              end
+            end
+          end
+
+          describe "metric definitions" do
+            describe "duration metric" do
+              subject { request_namespace.find_metric(:duration) }
+
+              its(:type) { is_expected.to eq(:distribution) }
+
+              its(:description) do
+                is_expected.to eq("HTTP request processing time in milliseconds")
+              end
+
+              its(:required_tags) { is_expected.to eq([:controller]) }
+            end
+
+            describe "total metric" do
+              subject { request_namespace.find_metric(:total) }
+
+              its(:type) { is_expected.to eq(:counter) }
+              its(:description) { is_expected.to eq("Total number of requests received") }
+              its(:required_tags) { is_expected.to eq([:controller]) }
+            end
+          end
+
+          describe "tag validation functionality" do
+            let(:controller_tag) { request_namespace.find_tag(:controller) }
+            let(:status_code_tag) { request_namespace.find_tag(:status_code) }
+
+            describe "controller tag validation" do
+              subject { controller_tag }
+
+              it "accepts snake_case values" do
+                expect(subject.allows_value?("home_controller")).to be true
+              end
+
+              it "accepts PascalCase values (should be transformed)" do
+                expect(subject.allows_value?("HomeController")).to be true
+              end
+            end
+
+            describe "status_code tag validation" do
+              subject { status_code_tag }
+
+              it "accepts valid HTTP status codes" do
+                expect(subject.valid_value?(200)).to be true
+              end
+
+              it "rejects invalid status codes" do
+                expect(subject.valid_value?(999)).to be false
+              end
+            end
+          end
+        end
       end
-
-      # Verify the schema structure matches the README example
-      web_ns = schema.find_namespace(:web)
-      request_ns = web_ns.find_namespace(:request)
-
-      expect(request_ns).not_to be_nil
-
-      # Check tags
-      expect(request_ns.find_tag(:controller)).not_to be_nil
-      expect(request_ns.find_tag(:action)).not_to be_nil
-      expect(request_ns.find_tag(:method)).not_to be_nil
-      expect(request_ns.find_tag(:status_code)).not_to be_nil
-
-      # Check metrics
-      duration_metric = request_ns.find_metric(:duration)
-      expect(duration_metric.type).to eq(:distribution)
-      expect(duration_metric.description).to eq('HTTP request processing time in milliseconds')
-      expect(duration_metric.required_tags).to eq([:controller])
-
-      total_metric = request_ns.find_metric(:total)
-      expect(total_metric.type).to eq(:counter)
-      expect(total_metric.description).to eq('Total number of requests received')
-      expect(total_metric.required_tags).to eq([:controller])
-
-      # Verify tag validation works
-      controller_tag = request_ns.find_tag(:controller)
-      expect(controller_tag.allows_value?('home_controller')).to be true
-      expect(controller_tag.allows_value?('HomeController')).to be true # should be transformed
-
-      status_code_tag = request_ns.find_tag(:status_code)
-      expect(status_code_tag.valid_value?(200)).to be true
-      expect(status_code_tag.valid_value?(999)).to be false
     end
   end
 end

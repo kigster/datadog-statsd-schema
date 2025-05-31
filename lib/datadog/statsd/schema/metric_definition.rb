@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'dry-struct'
-require 'dry-types'
+require "dry-struct"
+require "dry-types"
 
 module Datadog
   class Statsd
@@ -27,7 +27,7 @@ module Datadog
         def full_name(namespace_path = [])
           return name.to_s if namespace_path.empty?
 
-          "#{namespace_path.join('.')}.#{name}"
+          "#{namespace_path.join(".")}.#{name}"
         end
 
         # Check if a tag is allowed for this metric

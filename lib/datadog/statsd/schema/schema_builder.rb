@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative 'namespace'
-require_relative 'tag_definition'
-require_relative 'metric_definition'
+require_relative "namespace"
+require_relative "tag_definition"
+require_relative "metric_definition"
 
 module Datadog
   class Statsd
@@ -39,7 +39,7 @@ module Datadog
         # Validate the schema for consistency
         def validate!
           errors = @root_namespace.validate_tag_references
-          raise SchemaError, "Schema validation failed: #{errors.join(', ')}" unless errors.empty?
+          raise SchemaError, "Schema validation failed: #{errors.join(", ")}" unless errors.empty?
         end
 
         # Helper class for building transformers
@@ -152,7 +152,7 @@ module Datadog
                 units: options[:units]
               )
 
-              if block_given?
+              unless block.nil?
                 metric_builder = MetricBuilder.new(metric_def)
                 metric_builder.instance_eval(&block)
                 metric_def = metric_builder.build

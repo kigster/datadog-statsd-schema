@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-require 'datadog/statsd'
-require 'active_support/core_ext/module/delegation'
+require "datadog/statsd"
+require "active_support/core_ext/module/delegation"
 
-require_relative 'schema/version'
-require_relative 'schema/errors'
-require_relative 'schema/tag_definition'
-require_relative 'schema/metric_definition'
-require_relative 'schema/namespace'
-require_relative 'schema/schema_builder'
-require_relative 'schema/emitter'
+require_relative "schema/version"
+require_relative "schema/errors"
+require_relative "schema/tag_definition"
+require_relative "schema/metric_definition"
+require_relative "schema/namespace"
+require_relative "schema/schema_builder"
+require_relative "schema/emitter"
 
 module Datadog
   class Statsd

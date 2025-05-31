@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'dry-struct'
-require 'dry-types'
+require "dry-struct"
+require "dry-types"
 
 module Datadog
   class Statsd
@@ -59,9 +59,7 @@ module Datadog
           end
 
           # Apply custom validation if present
-          if validate.is_a?(Proc)
-            return validate.call(transformed_value)
-          end
+          return validate.call(transformed_value) if validate.is_a?(Proc)
 
           # Apply value restrictions
           allows_value?(transformed_value)
