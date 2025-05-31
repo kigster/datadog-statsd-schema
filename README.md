@@ -66,63 +66,63 @@ Below is an example where we configure the gem by creating a schema using the pr
   )
   
   Datadog::Statsd::Schema.configure do |config|
-    config.statsd = $statsd
-
     # This configures the global tags that will be attached to all methods
     config.tags = { 
       env: "development",
       arch: Etc.uname[:machine],
       version: Git.open('.').object('HEAD').sha
     }
+    
+    config.statsd = $statsd
+  end
+    
+  schema = Datadog.schema do
+    # Transformers can be attached to the tags, and apply before the tags are submitted
+    # or validated.
+    transformers do
+      underscore: ->(text) { text.underscore },
+      downcase: ->(text) { text.downcase }
+    end
 
-    config.schema = Datadog::Statsd::Schema.new do
-      # Transformers can be attached to the tags, and apply before the tags are submitted
-      # or validated.
-      transformers do
-        underscore: ->(text) { text.underscore },
-        downcase: ->(text) { text.downcase }
+    namespace :marathon do
+      tags do
+        tag :course, 
+            values: ["san francisco", "boston", "new york"],         
+            transform: %i[downcase underscore],
+
+        tag :marathon_type, values: %w[half full]
+        tag :status, values: %w[finished no-show incomplete]
+        tag :sponsorship, values: %w[nike cocacola redbull]
       end
 
-      namespace :marathon do
-        tags do
-          tag :course, 
-              values: ["san francisco", "boston", "new york"],         
-              transform: %i[downcase underscore],
-
-          tag :marathon_type, values: %w[half full]
-          tag :status, values: %w[finished no-show incomplete]
-          tag :sponsorship, values: %w[nike cocacola redbull]
+      metrics do 
+        # This defines a single metric "marathon.started.total"
+        namespace :started do
+          counter :total do
+            description "Incrementing - the total number of people who were registered for this marathon"
+            tags required: %i[ course marathon_type ],
+                  allowed:  %i[ sponsorship ]
+          end
         end
 
-        metrics do 
-          # This defines a single metric "marathon.started.total"
-          namespace :started do
-            counter :total do
-              description "Incrementing - the total number of people who were registered for this marathon"
-              tags required: %i[ course marathon_type ],
-                   allowed:  %i[ sponsorship ]
-            end
+        # defines two metrics: a counter metric named "marathon.finished.total" and
+        # a distribution metric "marathon.finished.duration"
+        namespace :finished do
+          counter :total, inherit_tags: "marathon.started.total",
+            description "The number of people who finished a given marathon"
+            tags required: %i[ status ]
           end
 
-          # defines two metrics: a counter metric named "marathon.finished.total" and
-          # a distribution metric "marathon.finished.duration"
-          namespace :finished do
-            counter :total, inherit_tags: "marathon.started.total",
-              description "The number of people who finished a given marathon"
-              tags required: %i[ status ]
-            end
-
-            distribution :duration, units: "minutes", inherit_tags: "marathon.finished.count" do
-              description "The distribution of all finish times registered."
-            end
-          end   
-        end
+          distribution :duration, units: "minutes", inherit_tags: "marathon.finished.count" do
+            description "The distribution of all finish times registered."
+          end
+        end   
       end
     end
   end
 
-  my_sender = Datadog::Statsd::Emitter.new(
-    prefix: "marathon", 
+  my_sender = Datadog.emitter(
+    schema: schema,
     tags: { marathon_type: :full, course: "san-francisco" }
   )
 
@@ -139,12 +139,12 @@ You can provide a more specific prefix, which would then be unnecessary when dec
 `marathonfinished.total` and `marathon.finished.duration` are properly defined.
 
 ```ruby
-  finish_sender = Datadog::Statsd::Emitter.new(
-    prefix: "marathon.finished", 
+  finish_sender = Datadog.emitter(
+    metric: "marathon.finished", 
     tags: { marathon_type: :full, course: "san-francisco" }
   )
-  finish.increment('total')
-  finish.distribution('duration', 34)
+  finish.increment("total")
+  finish.distribution("duration", 34)
 ```
 
 The above code will transmit the following metric, with the following tags:

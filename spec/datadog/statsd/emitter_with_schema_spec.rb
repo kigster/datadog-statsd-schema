@@ -15,7 +15,7 @@ module Datadog
       end
 
       def build_sample_schema
-        Schema.new do
+        ::Datadog.schema do
           namespace :web do
             tags do
               tag :controller, values: %w[users posts home]
