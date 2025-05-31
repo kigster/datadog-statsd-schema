@@ -39,6 +39,9 @@ You can send metrics via class methods of `Datadog::Statsd::Emitter`, or by inst
 This is the most straightforward way of using this gem. You can just pass your metric names and tags to the standard operations on Statsd, just like so:
 
 ```ruby
+  require 'datadog/statsd'
+  require 'datadog/statsd/schema'
+
   Datadog::Statsd::Emitter.increment(
     'marathon.started.total', 
     by: 7, 
@@ -60,15 +63,19 @@ So let's look at a more elaborate use-case.
 Below is an example where we configure the gem by creating a schema using the provided DSL. This can be a single global schema or assigned to a specific Statsd Sender, although you can have any number of Senders of type `Datadog::Statsd::Emitter` that map to a new connection and new defaults.
 
 ```ruby
-  require 'datadog/statsd'
   require 'etc'
   require 'git'
 
+  require 'datadog/statsd'
+  require 'datadog/statsd/schema'
+
+  # Define the global statsd instance that we'll use to send data through
   $statsd = ::Datadog::Statsd.new(
     'localhost', 8125, 
     delay_serialization: true
   )
-  
+
+  # Configure the schema with global tags and the above-created Statsd instance
   Datadog::Statsd::Schema.configure do |config|
     # This configures the global tags that will be attached to all methods
     config.tags = { 
@@ -79,9 +86,10 @@ Below is an example where we configure the gem by creating a schema using the pr
     
     config.statsd = $statsd
   end
-    
+
+  # Now we'll create a Schema using the provided Schema DSL:
   schema = Datadog.schema do
-    # Transformers can be attached to the tags, and apply before the tags are submitted
+    # Transformers can be attached to the tags, and applied before the tags are submitted
     # or validated.
     transformers do
       underscore: ->(text) { text.underscore },
@@ -139,8 +147,7 @@ Below is an example where we configure the gem by creating a schema using the pr
   my_sender.distribution('finished.duration', 35.09, tags: { sponsorship: "redbull" })
 ```
 
-You can provide a more specific prefix, which would then be unnecessary when declaring the metric name. In  both cases, the Schema will validate that the metric named
-`marathonfinished.total` and `marathon.finished.duration` are properly defined.
+You can provide a more specific prefix, which would be unnecessary when declaring the metric name. In  both cases, the Schema will validate that the metrics named `marathonfinished.total` and `marathon.finished.duration` are appropriately defined.
 
 ```ruby
   finish_sender = Datadog.emitter(
