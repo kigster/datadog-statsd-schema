@@ -247,7 +247,7 @@ Let's say this monitor only tracks requests from logged in premium users,  then 
   # It's equivalent to *Datadog::Statsd::Emitter.new*
   traffic_monitor = Datadog.emitter(
     self,
-    prefix: "web.request", 
+    metric: "web.request", 
     tags: { billing_plan: :premium, logged_in: :logged_in }
   )
 
@@ -298,7 +298,7 @@ The first argument to the `Emitter.new()` or `Datadog.emitter()` (those are equi
 
 Subsequent arguments are hash arguments. 
 
- * `metric` — The (optional) name of the metric prefix to track. If set to, eg. `emails`, then any subsequent method sending metric will prepend `emails.` to it, for example:
+ * `metric` — The (optional) name of the metric to track. If set to, eg. `emails`, then any subsequent method sending metric will prepend `emails.` to it, for example:
 
 ```ruby
 emitter.increment('sent.total', by: 3)
