@@ -107,10 +107,24 @@ module Datadog
         end
       end
 
-      attr_reader :tags, :ab_test, :sample_rate, :metric, :schema, :validation_mode
+      attr_reader :tags, :ab_test, :sample_rate, :metric, :schema, :validation_mode, :stderr
 
+      # @description Initializes a new Statsd::Emitter instance.
+      # @param emitter [String, Symbol, Module, Class, Object] The emitter identifier.
+      # @param stderr [IO] The stderr output stream. Defaults to $stderr.
+      # @param metric [String] The metric name (or prefix) to use for all metrics.
+      # @param tags [Hash] The tags to add to the metric.
+      # @param ab_test [Hash] The AB test to add to the metric.
+      # @param sample_rate [Float] The sample rate to use for the metric.
+      # @param schema [Schema] The schema to use for validation.
+      # @param validation_mode [Symbol] The validation mode to use. Defaults to :strict.
+      #     :strict - Raises an error if the metric is invalid.
+      #     :warn - Logs a warning if the metric is invalid.
+      #     :drop - Drops the metric if it is invalid.
+      #     :off - Disables validation.
       def initialize(
         emitter = nil,
+        stderr: $stderr,
         metric: nil,
         tags: nil,
         ab_test: nil,
@@ -130,6 +144,7 @@ module Datadog
         @metric = metric
         @schema = schema
         @validation_mode = validation_mode
+        @stderr = stderr
 
         emitter =
           case emitter
@@ -441,17 +456,17 @@ module Datadog
         when :strict
           # Only show colored output if not in test and colored2 is available
           if Datadog::Statsd::Schema.in_test
-            warn "Schema Validation Error: #{error.message}"
+            stderr.puts "Schema Validation Error: #{error.message}"
           else
-            warn "Schema Validation Error:\n • ".yellow + error.message.to_s.red
+            stderr.puts "Schema Validation Error:\n • ".yellow + error.message.to_s.red
           end
           raise error
         when :warn
           # Only show colored output if not in test and colored2 is available
           if Datadog::Statsd::Schema.in_test
-            warn "Schema Validation Warning: #{error.message}"
+            stderr.puts "Schema Validation Warning: #{error.message}"
           else
-            warn "Schema Validation Warning:\n • ".yellow + error.message.to_s.bold.yellow
+            stderr.puts "Schema Validation Warning:\n • ".yellow + error.message.to_s.bold.yellow
           end
           nil # Continue execution
         when :drop
