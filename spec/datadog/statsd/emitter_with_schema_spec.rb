@@ -7,6 +7,8 @@ require "active_support/core_ext/string/inflections"
 module Datadog
   class Statsd
     RSpec.describe Emitter, "with schema validation" do
+      let(:stderr) { StringIO.new }
+      let(:opts) { { stderr: stderr } }
       let(:mock_statsd) { instance_double(::Datadog::Statsd) }
       let(:sample_schema) { build_sample_schema }
 
@@ -52,7 +54,7 @@ module Datadog
 
       describe "#initialize" do
         context "when initialized with schema" do
-          subject(:emitter) { described_class.new("TestController", schema: sample_schema) }
+          subject(:emitter) { described_class.new("TestController", schema: sample_schema, **opts) }
 
           its(:schema) { is_expected.to eq(sample_schema) }
           its(:validation_mode) { is_expected.to eq(:strict) }
@@ -60,7 +62,7 @@ module Datadog
 
         context "when initialized with schema and custom validation mode" do
           subject(:emitter) do
-            described_class.new("TestController", schema: sample_schema, validation_mode: :warn)
+            described_class.new("TestController", schema: sample_schema, validation_mode: :warn, **opts)
           end
 
           its(:validation_mode) { is_expected.to eq(:warn) }
@@ -68,7 +70,7 @@ module Datadog
       end
 
       describe "schema validation" do
-        subject(:emitter) { described_class.new("TestController", schema: sample_schema) }
+        subject(:emitter) { described_class.new("TestController", schema: sample_schema, **opts) }
 
         context "when metric exists in schema" do
           context "with valid metric type and tags" do
@@ -212,7 +214,7 @@ module Datadog
 
       describe "validation modes" do
         context "when validation_mode is :strict (default)" do
-          subject(:emitter) { described_class.new("TestController", schema: sample_schema) }
+          subject(:emitter) { described_class.new("TestController", schema: sample_schema, **opts) }
 
           it "raises error for invalid metrics" do
             expect do
@@ -238,19 +240,24 @@ module Datadog
             end.not_to raise_error
           end
 
-          it "still sends the metric to statsd" do
-            expect(mock_statsd).to receive(:increment).with(
-              "unknown.metric",
-              tags: { emitter: "test_controller" }
-            )
+          context "without stderr output" do
+            subject(:emitter) do
+              described_class.new("TestController", schema: sample_schema, validation_mode: :warn, stderr: stderr)
+            end
+            it "still sends the metric to statsd" do
+              expect(mock_statsd).to receive(:increment).with(
+                "unknown.metric",
+                tags: { emitter: "test_controller" }
+              )
 
-            emitter.increment("unknown.metric")
+              emitter.increment("unknown.metric")
+            end
           end
         end
 
         context "when validation_mode is :drop" do
           subject(:emitter) do
-            described_class.new("TestController", schema: sample_schema, validation_mode: :drop)
+            described_class.new("TestController", schema: sample_schema, validation_mode: :drop, **opts)
           end
 
           it "silently drops invalid metrics without error or warning" do
@@ -273,7 +280,7 @@ module Datadog
 
         context "when validation_mode is :off" do
           subject(:emitter) do
-            described_class.new("TestController", schema: sample_schema, validation_mode: :off)
+            described_class.new("TestController", schema: sample_schema, validation_mode: :off, **opts)
           end
 
           it "performs no validation and sends all metrics" do
@@ -293,7 +300,8 @@ module Datadog
             "TestController",
             metric: "web.page_views",
             tags: { environment: "production" },
-            schema: sample_schema
+            schema: sample_schema,
+            **opts
           )
         end
 
@@ -308,7 +316,8 @@ module Datadog
             invalid_emitter = described_class.new(
               "TestController",
               metric: "web.invalid_metric",
-              schema: sample_schema
+              schema: sample_schema,
+              **opts
             )
 
             expect do
@@ -322,7 +331,8 @@ module Datadog
             described_class.new(
               "TestController",
               ab_test: { "test_2025" => "control" },
-              schema: sample_schema
+              schema: sample_schema,
+              **opts
             )
           end
 
@@ -343,7 +353,7 @@ module Datadog
       end
 
       describe "metric type normalization" do
-        subject(:emitter) { described_class.new("TestController", schema: sample_schema) }
+        subject(:emitter) { described_class.new("TestController", schema: sample_schema, **opts) }
 
         it "normalizes increment to counter" do
           expect(mock_statsd).to receive(:increment).with(
@@ -385,7 +395,7 @@ module Datadog
       end
 
       describe "error message quality" do
-        subject(:emitter) { described_class.new("TestController", schema: sample_schema) }
+        subject(:emitter) { described_class.new("TestController", schema: sample_schema, **opts) }
 
         it "provides clear error for missing required tags" do
           expect do
@@ -410,7 +420,7 @@ module Datadog
       end
 
       describe "no schema provided" do
-        subject(:emitter) { described_class.new("TestController") }
+        subject(:emitter) { described_class.new("TestController", **opts) }
 
         it "performs no validation when no schema is provided" do
           expect(mock_statsd).to receive(:increment).with(

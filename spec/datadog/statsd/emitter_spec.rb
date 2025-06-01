@@ -7,6 +7,8 @@ require "active_support/core_ext/string/inflections"
 module Datadog
   class Statsd
     RSpec.describe Emitter do
+      let(:stderr) { StringIO.new }
+      let(:opts) { { stderr: stderr } }
       let(:mock_statsd) { instance_double(::Datadog::Statsd) }
 
       before do
@@ -31,21 +33,21 @@ module Datadog
 
       describe "#initialize" do
         context "when initialized with a string identifier" do
-          subject(:emitter) { described_class.new("test") }
+          subject(:emitter) { described_class.new("test", **opts) }
 
           it { is_expected.to be_a(described_class) }
           its(:tags) { is_expected.to include(emitter: "test") }
         end
 
         context "when initialized with a class identifier" do
-          subject(:emitter) { described_class.new(String) }
+          subject(:emitter) { described_class.new(String, **opts) }
 
           it { is_expected.to be_a(described_class) }
           its(:tags) { is_expected.to include(emitter: "string") }
         end
 
         context "when initialized with a module identifier" do
-          subject(:emitter) { described_class.new(::Datadog::Statsd::Emitter) }
+          subject(:emitter) { described_class.new(::Datadog::Statsd::Emitter, **opts) }
 
           it { is_expected.to be_a(described_class) }
           its(:tags) { is_expected.to include(emitter: "datadog.statsd.emitter") }
@@ -53,14 +55,14 @@ module Datadog
 
         context "when initialized without arguments" do
           it "raises an ArgumentError" do
-            expect { described_class.new }.to raise_error(ArgumentError, /use class methods/)
+            expect { described_class.new(**opts) }.to raise_error(ArgumentError, /use class methods/)
           end
         end
       end
 
       describe "#normalize_arguments" do
         context "when initialized with metric in constructor" do
-          subject(:emitter) { described_class.new(nil, metric: "test.metric") }
+          subject(:emitter) { described_class.new(nil, metric: "test.metric", **opts) }
 
           context "when calling increment with no arguments" do
             it "uses constructor metric" do
@@ -99,7 +101,7 @@ module Datadog
         end
 
         context "when initialized with tags in constructor" do
-          subject(:emitter) { described_class.new(nil, tags: { env: "test", service: "api" }) }
+          subject(:emitter) { described_class.new(nil, tags: { env: "test", service: "api" }, **opts) }
 
           context "when calling increment with no additional tags" do
             it "includes constructor tags" do
@@ -130,7 +132,7 @@ module Datadog
         end
 
         context "when initialized with ab_test in constructor" do
-          subject(:emitter) { described_class.new(nil, ab_test: { "login_test_2025" => "control" }) }
+          subject(:emitter) { described_class.new(nil, ab_test: { "login_test_2025" => "control" }, **opts) }
 
           context "when calling increment" do
             it "converts ab_test to tags" do
@@ -161,7 +163,7 @@ module Datadog
         end
 
         context "when ab_test provided in both constructor and method call" do
-          subject(:emitter) { described_class.new(nil, ab_test: { "login_test_2025" => "control" }) }
+          subject(:emitter) { described_class.new(nil, ab_test: { "login_test_2025" => "control" }, **opts) }
 
           it "method ab_test overrides constructor ab_test" do
             expect(mock_statsd).to receive(:increment).with(
@@ -173,7 +175,7 @@ module Datadog
         end
 
         context "when initialized with sample_rate in constructor" do
-          subject(:emitter) { described_class.new(nil, sample_rate: 0.5) }
+          subject(:emitter) { described_class.new(nil, sample_rate: 0.5, **opts) }
 
           context "when calling increment" do
             it "includes constructor sample_rate" do
@@ -190,7 +192,7 @@ module Datadog
           end
 
           context "when sample_rate is 1.0 (default)" do
-            subject(:emitter) { described_class.new(nil, sample_rate: 1.0) }
+            subject(:emitter) { described_class.new(nil, sample_rate: 1.0, **opts) }
 
             it "does not include sample_rate" do
               expect(mock_statsd).to receive(:increment).with("test.metric")
@@ -200,7 +202,7 @@ module Datadog
         end
 
         context "when initialized with identifier in constructor" do
-          subject(:emitter) { described_class.new("TestController") }
+          subject(:emitter) { described_class.new("TestController", **opts) }
 
           context "when calling increment" do
             it "includes identifier tag" do
@@ -220,7 +222,8 @@ module Datadog
               metric: "users.action",
               tags: { env: "test" },
               ab_test: { "login_test" => "control" },
-              sample_rate: 0.8
+              sample_rate: 0.8,
+              **opts
             )
           end
 
@@ -268,7 +271,7 @@ module Datadog
       end
 
       describe "method forwarding" do
-        subject(:emitter) { described_class.new("Email::SenderController") }
+        subject(:emitter) { described_class.new("Email::SenderController", **opts) }
 
         let(:expected_tags) { { emitter: "email.sender_controller" } }
 

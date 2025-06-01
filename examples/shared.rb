@@ -15,7 +15,7 @@ STATSD = Datadog::Statsd.new(
   "localhost", 8125
 )
 
-class FakeStatsd # rubocop:disable Style/Documentation
+class FakeStatsd
   def initialize(...); end
 
   def method_missing(m, *args, **opts)
