@@ -199,6 +199,10 @@ my_sender.distribution('finished.duration', 35.09, tags: { sponsorship: "redbull
 
 In this case, the schema will validate that the metrics are named `marathon.finished.total` and `marathon.finished.duration`, and that their tags are appropriately defined.
 
+And if we try to send metrics that are not valid, or tag values that have not been registered (like `course: "austin"`) we get the following errors, as shown on this screenshot from running the provided examples:
+
+![invalid](https://raw.githubusercontent.com/kigster/datadog-statsd-schema/refs/heads/main/examples/schema_emitter.png)
+
 In the next example, we initialize emitter with the metric `marathon.finished`, which indicates that we are only going to be sending the finishing data with this emitter. Note how the first argument we pass to `increment()` and `distribution()` are just words like `total` and `duration`, which are appended to `marathon.finished`.
 
 ```ruby
