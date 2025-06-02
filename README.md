@@ -13,7 +13,9 @@ The gem features:
    * tags provided to the `Emitter.new` 
    * and finally, the specific tags provided with each call to `#increment` or `#gauge` etc.
 
- * Declarative schema for permitted metric names, their metric types, the tags required and allowed to be associated with the metric, as well as the tag values validation based on a flexible validation strategy.
+ * Declarative DSL-based schema for permitted metric names, their metric types, the tags required or allowed to be associated with the metric.
+ * Supports the tag values validation based on a flexible validation strategy and procs.
+ * Supports transformers: functions that are applied to tag values to normalize them.
  * Flexible validation strategy: `:strict` raises an exception, `:warn` prints a warning to STDERR, `:drop` skips invalid metric send silently, and `:off` turns off validation.
 
 This approach helps keeping custom metrics sent to Datadog organized and adhere to the predefined schema. 
