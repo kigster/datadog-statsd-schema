@@ -10,6 +10,7 @@ module Datadog
       let(:stderr) { StringIO.new }
       let(:opts) { { stderr: stderr } }
       let(:mock_statsd) { instance_double(::Datadog::Statsd) }
+      let(:global_tags) { { env: "test", version: "1.0.0" } }
 
       before do
         allow(described_class).to receive(:statsd).and_return(mock_statsd)
@@ -18,16 +19,16 @@ module Datadog
       describe ".configure" do
         before do
           described_class.configure do |config|
-            config.env = "test"
-            config.version = "1.0.0"
+            config.env = global_tags[:env]
+            config.version = global_tags[:version]
           end
         end
 
         describe ".global_tags" do
           subject { described_class.global_tags }
 
-          its(:env) { is_expected.to eq("test") }
-          its(:version) { is_expected.to eq("1.0.0") }
+          its(:env) { is_expected.to eq(global_tags[:env]) }
+          its(:version) { is_expected.to eq(global_tags[:version]) }
         end
       end
 
@@ -36,21 +37,21 @@ module Datadog
           subject(:emitter) { described_class.new("test", **opts) }
 
           it { is_expected.to be_a(described_class) }
-          its(:tags) { is_expected.to include(emitter: "test") }
+          its(:tags) { is_expected.to include(emitter: "test", **global_tags) }
         end
 
         context "when initialized with a class identifier" do
           subject(:emitter) { described_class.new(String, **opts) }
 
           it { is_expected.to be_a(described_class) }
-          its(:tags) { is_expected.to include(emitter: "string") }
+          its(:tags) { is_expected.to include(emitter: "string", **global_tags) }
         end
 
         context "when initialized with a module identifier" do
           subject(:emitter) { described_class.new(::Datadog::Statsd::Emitter, **opts) }
 
           it { is_expected.to be_a(described_class) }
-          its(:tags) { is_expected.to include(emitter: "datadog.statsd.emitter") }
+          its(:tags) { is_expected.to include(emitter: "datadog.statsd.emitter", **global_tags) }
         end
 
         context "when initialized without arguments" do
@@ -66,35 +67,35 @@ module Datadog
 
           context "when calling increment with no arguments" do
             it "uses constructor metric" do
-              expect(mock_statsd).to receive(:increment).with("test.metric")
+              expect(mock_statsd).to receive(:increment).with("test.metric", tags: global_tags)
               emitter.increment
             end
           end
 
           context "when calling increment with nil as first argument" do
             it "uses constructor metric" do
-              expect(mock_statsd).to receive(:increment).with("test.metric")
+              expect(mock_statsd).to receive(:increment).with("test.metric", tags: global_tags)
               emitter.increment(nil)
             end
           end
 
           context "when calling increment with a provided metric" do
             it "uses provided metric" do
-              expect(mock_statsd).to receive(:increment).with("other.metric")
+              expect(mock_statsd).to receive(:increment).with("other.metric", tags: global_tags)
               emitter.increment("other.metric")
             end
           end
 
           context "when calling gauge with nil and additional arguments" do
             it "preserves additional positional arguments" do
-              expect(mock_statsd).to receive(:gauge).with("test.metric", 100)
+              expect(mock_statsd).to receive(:gauge).with("test.metric", 100, tags: global_tags)
               emitter.gauge(nil, 100)
             end
           end
 
           context "when calling increment with hash arguments" do
             it "supports optional hash arguments" do
-              expect(mock_statsd).to receive(:increment).with("test.metric", by: 10)
+              expect(mock_statsd).to receive(:increment).with("test.metric", by: 10, tags: global_tags)
               emitter.increment("test.metric", by: 10)
             end
           end
@@ -105,7 +106,7 @@ module Datadog
 
           context "when calling increment with no additional tags" do
             it "includes constructor tags" do
-              expect(mock_statsd).to receive(:increment).with("test.metric", tags: { env: "test", service: "api" })
+              expect(mock_statsd).to receive(:increment).with("test.metric", tags: { env: "test", service: "api", version: "1.0.0" })
               emitter.increment("test.metric")
             end
           end
@@ -114,7 +115,7 @@ module Datadog
             it "merges constructor tags with method tags" do
               expect(mock_statsd).to receive(:increment).with(
                 "test.metric",
-                tags: { env: "test", service: "api", user_id: 123 }
+                tags: { env: "test", service: "api", user_id: 123, version: "1.0.0" }
               )
               emitter.increment("test.metric", tags: { user_id: 123 })
             end
@@ -124,7 +125,7 @@ module Datadog
             it "method tags take precedence" do
               expect(mock_statsd).to receive(:increment).with(
                 "test.metric",
-                tags: { env: "production", service: "api" }
+                tags: { env: "production", service: "api", version: "1.0.0" }
               )
               emitter.increment("test.metric", tags: { env: "production" })
             end
@@ -138,7 +139,7 @@ module Datadog
             it "converts ab_test to tags" do
               expect(mock_statsd).to receive(:increment).with(
                 "test.metric",
-                tags: { ab_test_name: "login_test_2025", ab_test_group: "control" }
+                tags: { ab_test_name: "login_test_2025", ab_test_group: "control", env: "test", version: "1.0.0" }
               )
               emitter.increment("test.metric")
             end
@@ -155,7 +156,7 @@ module Datadog
             it "uses last ab_test entry" do
               expect(mock_statsd).to receive(:increment).with(
                 "test.metric",
-                tags: { ab_test_name: "signup_test_2025", ab_test_group: "variant_a" }
+                tags: { ab_test_name: "signup_test_2025", ab_test_group: "variant_a", env: "test", version: "1.0.0" }
               )
               emitter.increment("test.metric")
             end
@@ -168,7 +169,7 @@ module Datadog
           it "method ab_test overrides constructor ab_test" do
             expect(mock_statsd).to receive(:increment).with(
               "test.metric",
-              tags: { ab_test_name: "signup_test", ab_test_group: "variant_a" }
+              tags: { ab_test_name: "signup_test", ab_test_group: "variant_a", env: "test", version: "1.0.0" }
             )
             emitter.increment("test.metric", ab_test: { "signup_test" => "variant_a" })
           end
@@ -179,14 +180,14 @@ module Datadog
 
           context "when calling increment" do
             it "includes constructor sample_rate" do
-              expect(mock_statsd).to receive(:increment).with("test.metric", sample_rate: 0.5)
+              expect(mock_statsd).to receive(:increment).with("test.metric", sample_rate: 0.5, tags: global_tags)
               emitter.increment("test.metric")
             end
           end
 
           context "when method provides sample_rate" do
             it "method sample_rate overrides constructor sample_rate" do
-              expect(mock_statsd).to receive(:increment).with("test.metric", sample_rate: 0.1)
+              expect(mock_statsd).to receive(:increment).with("test.metric", sample_rate: 0.1, tags: global_tags)
               emitter.increment("test.metric", sample_rate: 0.1)
             end
           end
@@ -195,7 +196,7 @@ module Datadog
             subject(:emitter) { described_class.new(nil, sample_rate: 1.0, **opts) }
 
             it "does not include sample_rate" do
-              expect(mock_statsd).to receive(:increment).with("test.metric")
+              expect(mock_statsd).to receive(:increment).with("test.metric", tags: global_tags)
               emitter.increment("test.metric")
             end
           end
@@ -208,7 +209,7 @@ module Datadog
             it "includes identifier tag" do
               expect(mock_statsd).to receive(:increment).with(
                 "test.metric",
-                tags: { emitter: "test_controller" }
+                tags: { emitter: "test_controller", env: "test", version: "1.0.0" }
               )
               emitter.increment("test.metric")
             end
@@ -236,7 +237,8 @@ module Datadog
                   env: "test",
                   ab_test_name: "login_test",
                   ab_test_group: "control",
-                  user_id: 456
+                  user_id: 456,
+                  version: "1.0.0"
                 },
                 sample_rate: 0.8
               )
@@ -254,7 +256,8 @@ module Datadog
                   env: "production",
                   ab_test_name: "new_test",
                   ab_test_group: "variant_b",
-                  user_id: 789
+                  user_id: 789,
+                  version: "1.0.0"
                 },
                 sample_rate: 0.1
               )
@@ -273,7 +276,7 @@ module Datadog
       describe "method forwarding" do
         subject(:emitter) { described_class.new("Email::SenderController", **opts) }
 
-        let(:expected_tags) { { emitter: "email.sender_controller" } }
+        let(:expected_tags) { { emitter: "email.sender_controller", env: "test", version: "1.0.0" } }
 
         describe "#increment" do
           it "forwards increment calls with correct arguments" do

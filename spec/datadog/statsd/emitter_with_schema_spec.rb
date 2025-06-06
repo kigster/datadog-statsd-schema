@@ -233,7 +233,7 @@ module Datadog
               expect do
                 expect(mock_statsd).to receive(:increment).with(
                   "unknown.metric",
-                  tags: { emitter: "test_controller" }
+                  tags: { emitter: "test_controller", env: "test", version: "1.0.0" }
                 )
                 emitter.increment("unknown.metric")
               end.to output(/Schema Validation Warning/).to_stderr
@@ -247,7 +247,7 @@ module Datadog
             it "still sends the metric to statsd" do
               expect(mock_statsd).to receive(:increment).with(
                 "unknown.metric",
-                tags: { emitter: "test_controller" }
+                tags: { emitter: "test_controller", env: "test", version: "1.0.0" }
               )
 
               emitter.increment("unknown.metric")
@@ -286,7 +286,7 @@ module Datadog
           it "performs no validation and sends all metrics" do
             expect(mock_statsd).to receive(:increment).with(
               "unknown.metric",
-              tags: { emitter: "test_controller" }
+              tags: { emitter: "test_controller", env: "test", version: "1.0.0" }
             )
 
             emitter.increment("unknown.metric")
@@ -425,7 +425,7 @@ module Datadog
         it "performs no validation when no schema is provided" do
           expect(mock_statsd).to receive(:increment).with(
             "any.metric",
-            tags: { emitter: "test_controller" }
+            tags: { emitter: "test_controller", env: "test", version: "1.0.0" }
           )
           emitter.increment("any.metric")
         end
