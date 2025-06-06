@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "stringio"
-
+require "colored2"
 module Datadog
   class Statsd
     module Schema
@@ -49,15 +49,21 @@ module Datadog
           histogram: %w[count min max sum avg]
         }.freeze
 
-        attr_reader :schemas, :stdout, :stderr
+        attr_reader :schemas, :stdout, :stderr, :color
 
         # Initialize analyzer with schema(s)
         # @param schemas [Datadog::Statsd::Schema::Namespace, Array<Datadog::Statsd::Schema::Namespace>]
         #   Single schema or array of schemas to analyze
-        def initialize(schemas, stdout: $stdout, stderr: $stderr)
+        def initialize(schemas, stdout: $stdout, stderr: $stderr, color: true)
           @schemas = Array(schemas)
           @stdout = stdout
           @stderr = stderr
+          @color = color
+          if color
+            Colored2.enable!
+          else
+            Colored2.disable!
+          end
         end
 
         # Perform comprehensive analysis of the schemas
@@ -326,28 +332,64 @@ module Datadog
         # @param total_unique_metrics [Integer] Total unique metrics
         # @param total_possible_custom_metrics [Integer] Total possible combinations
         # @return [String] Formatted output
-        def format_analysis_output(metrics_analysis, total_unique_metrics, total_possible_custom_metrics)
+        def format_analysis_output(
+          metrics_analysis,
+          total_unique_metrics,
+          total_possible_custom_metrics
+        )
           output = StringIO.new
-          output.puts "Schema Analysis Results"
-          output.puts "======================"
-          output.puts
-          output.puts "Summary:"
-          output.puts "  Total unique metrics: #{total_unique_metrics}"
-          output.puts "  Total possible custom metric combinations: #{total_possible_custom_metrics}"
-          output.puts
-          output.puts "Detailed Metrics Analysis:"
-          output.puts
 
+          format_metric_analysis_header(output)
           metrics_analysis.each do |analysis|
-            output.puts "Metric: #{analysis.metric_name} (#{analysis.metric_type})"
-            output.puts "  Expanded names: #{analysis.expanded_names.join(", ")}"
-            output.puts "  Unique tags: #{analysis.unique_tags}"
-            output.puts "  Total tag values: #{analysis.unique_tag_values}"
-            output.puts "  Possible combinations: #{analysis.total_combinations}"
             output.puts
+            format_metric_analysis(output, analysis)
+            line(output, placement: :flat)
           end
-
+          summary(output, total_unique_metrics, total_possible_custom_metrics)
           output.string
+        end
+
+        def line(output, placement: :top)
+          if placement == :top
+            output.puts "┌──────────────────────────────────────────────────────────────────────────────────────────────┐".white.on.blue
+          elsif placement == :bottom
+            output.puts "└──────────────────────────────────────────────────────────────────────────────────────────────┘".white.on.blue
+          elsif placement == :middle
+            output.puts "├──────────────────────────────────────────────────────────────────────────────────────────────┤".white.on.blue
+          elsif placement == :flat
+            output.puts " ──────────────────────────────────────────────────────────────────────────────────────────────".white.bold
+          end
+        end
+
+        def summary(output, total_unique_metrics, total_possible_custom_metrics)
+          line(output)
+          output.puts "│ Schema Analysis Results:                                                                     │".yellow.bold.on.blue
+          output.puts "│                                        SUMMARY                                               │".white.on.blue
+          line(output, placement: :bottom)
+          output.puts
+          output.puts "                     Total unique metrics: #{("%3d" % total_unique_metrics).bold.green}"
+          output.puts "Total possible custom metric combinations: #{("%3d" % total_possible_custom_metrics).bold.green}"
+          output.puts
+        end
+
+        def format_metric_analysis_header(output)
+          line(output)
+          output.puts "│ Detailed Metric Analysis:                                                                    │".white.on.blue
+          line(output, placement: :bottom)
+        end
+
+        def format_metric_analysis(output, analysis)
+          output.puts "  • #{analysis.metric_type.to_s.cyan}('#{analysis.metric_name.yellow.bold}')"
+          if analysis.expanded_names.size > 1
+            output.puts  "    Expanded names:"
+            output.print "      • ".yellow
+            output.puts analysis.expanded_names.join("\n      • ").yellow
+          end
+          output.puts
+          output.puts "                              Unique tags: #{("%3d" % analysis.unique_tags).bold.green}"
+          output.puts "                         Total tag values: #{("%3d" % analysis.unique_tag_values).bold.green}"
+          output.puts "                    Possible combinations: #{("%3d" % analysis.total_combinations).bold.green}"
+          output.puts
         end
       end
     end

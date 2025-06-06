@@ -7,6 +7,7 @@ gemspec
 
 gem "activesupport"
 gem "amazing_print"
+gem "colored2"
 gem "git"
 gem "irb"
 gem "ostruct"

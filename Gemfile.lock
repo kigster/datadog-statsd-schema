@@ -184,6 +184,7 @@ PLATFORMS
 DEPENDENCIES
   activesupport
   amazing_print
+  colored2
   datadog-statsd-schema!
   git
   irb
