@@ -51,14 +51,32 @@ module Datadog
         end
 
         extend Forwardable
-        def_delegators :datadog_statsd,
-                       :increment,
-                       :decrement,
-                       :gauge,
-                       :histogram,
-                       :distribution,
-                       :set,
-                       :flush
+        def_delegators :datadog_statsd, :flush
+
+        # Override metric methods to ensure global tags are applied
+        def increment(*args, **opts)
+          send_metric_with_global_tags(:increment, *args, **opts)
+        end
+
+        def decrement(*args, **opts)
+          send_metric_with_global_tags(:decrement, *args, **opts)
+        end
+
+        def gauge(*args, **opts)
+          send_metric_with_global_tags(:gauge, *args, **opts)
+        end
+
+        def histogram(*args, **opts)
+          send_metric_with_global_tags(:histogram, *args, **opts)
+        end
+
+        def distribution(*args, **opts)
+          send_metric_with_global_tags(:distribution, *args, **opts)
+        end
+
+        def set(*args, **opts)
+          send_metric_with_global_tags(:set, *args, **opts)
+        end
 
         def global_tags
           @global_tags ||= OpenStruct.new
@@ -66,6 +84,32 @@ module Datadog
 
         def configure
           yield(global_tags)
+        end
+
+        private
+
+        def send_metric_with_global_tags(method_name, *args, **opts)
+          # Ensure connection is established with global tags
+          connect unless datadog_statsd
+
+          # Merge global tags with provided tags
+          merged_tags = {}
+
+          # Add global tags from Schema configuration
+          schema_global_tags = ::Datadog::Statsd::Schema.configuration.tags || {}
+          merged_tags.merge!(schema_global_tags)
+
+          # Add global tags from Emitter configuration
+          emitter_global_tags = global_tags.to_h
+          merged_tags.merge!(emitter_global_tags)
+
+          # Add method-specific tags (these take precedence)
+          merged_tags.merge!(opts[:tags]) if opts[:tags]
+
+          # Update opts with merged tags
+          opts = opts.merge(tags: merged_tags) unless merged_tags.empty?
+
+          datadog_statsd.send(method_name, *args, **opts)
         end
 
         def connect(
@@ -79,7 +123,14 @@ module Datadog
           return @datadog_statsd if defined?(@datadog_statsd) && @datadog_statsd
 
           tags ||= {}
+
+          # Merge global tags from Schema configuration
+          schema_global_tags = ::Datadog::Statsd::Schema.configuration.tags || {}
+          tags = tags.merge(schema_global_tags)
+
+          # Merge global tags from Emitter configuration
           tags = tags.merge(global_tags.to_h)
+
           tags = tags.map { |k, v| "#{k}:#{v}" }
 
           opts ||= {}
@@ -137,8 +188,17 @@ module Datadog
                 "Datadog::Statsd::Emitter: use class methods if you are passing nothing to the constructor."
         end
         @sample_rate = sample_rate || 1.0
-        @tags = tags || nil
-        @tags.merge!(self.class.global_tags.to_h) if self.class.global_tags.present?
+
+        # Initialize tags with provided tags or empty hash
+        @tags = (tags || {}).dup
+
+        # Merge global tags from Schema configuration
+        schema_global_tags = ::Datadog::Statsd::Schema.configuration.tags || {}
+        @tags.merge!(schema_global_tags)
+
+        # Merge global tags from Emitter configuration
+        emitter_global_tags = self.class.global_tags.to_h
+        @tags.merge!(emitter_global_tags)
 
         @ab_test = ab_test || {}
         @metric = metric
@@ -161,7 +221,6 @@ module Datadog
 
         return unless emitter
 
-        @tags ||= {}
         @tags[:emitter] = emitter
       end
 
@@ -307,9 +366,16 @@ module Datadog
         end
 
         # Check for invalid tags (if metric has allowed_tags restrictions)
-        # Exclude framework tags like 'emitter' from validation
+        # Exclude framework tags and global tags from validation
         framework_tags = %i[emitter ab_test_name ab_test_group]
-        user_provided_tags = provided_tags.reject { |key, _| framework_tags.include?(key.to_sym) }
+
+        # Get global tags to exclude from validation
+        schema_global_tags = ::Datadog::Statsd::Schema.configuration.tags&.keys || []
+        emitter_global_tags = self.class.global_tags.to_h.keys
+        global_tag_keys = (schema_global_tags + emitter_global_tags).map(&:to_sym)
+
+        excluded_tags = framework_tags + global_tag_keys
+        user_provided_tags = provided_tags.reject { |key, _| excluded_tags.include?(key.to_sym) }
 
         invalid_tags = metric_definition.invalid_tags(user_provided_tags)
         if invalid_tags.any?
@@ -327,8 +393,8 @@ module Datadog
 
         # Validate tag values against schema definitions (including framework tags)
         provided_tags.each do |tag_name, tag_value|
-          # Skip validation for framework tags that don't have schema definitions
-          next if framework_tags.include?(tag_name.to_sym) && !effective_tags[tag_name.to_sym]
+          # Skip validation for framework tags and global tags that don't have schema definitions
+          next if excluded_tags.include?(tag_name.to_sym) && !effective_tags[tag_name.to_sym]
 
           tag_definition = effective_tags[tag_name.to_sym]
           next unless tag_definition

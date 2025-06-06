@@ -11,7 +11,7 @@
 
 Example:
 <pre>
-emitter = Datadog::Statsd.Registry(:email_emitter)
+emitter = Datadog::Statsd.registry[:email_emitter]
 emitter.increment('total')
 </pre>
 </dd>
