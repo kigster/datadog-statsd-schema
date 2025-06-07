@@ -1,638 +1,410 @@
 [![RSpec and Rubocop](https://github.com/kigster/datadog-statsd-schema/actions/workflows/ruby.yml/badge.svg)](https://github.com/kigster/datadog-statsd-schema/actions/workflows/ruby.yml)
 
-# Datadog::Statsd::Schema
+# Datadog StatsD Schema
 
-## Stop the Metric Madness (And Save Your Budget) 💸
+A Ruby gem that provides comprehensive schema definition, validation, and cost analysis for Datadog StatsD metrics. This library helps teams prevent metric explosion, control costs, and maintain consistent metric naming conventions.
 
-*"With great StatsD power comes great billing responsibility"* 
+## Features
 
-Every engineering team starts the same way with [Datadog custom metrics](https://docs.datadoghq.com/metrics/custom_metrics/dogstatsd_metrics_submission/?tab=ruby): a few innocent calls to `statsd.increment('user.signup')`, maybe a `statsd.gauge('queue.size', 42)`. Life is good. Metrics are flowing. Dashboards are pretty.
-
-Then reality hits. Your Datadog bill explodes 🚀 because:
-
-- **Marketing** added `statsd.increment('clicks', tags: { campaign_id: campaign.id })` across 10,000 campaigns
-- **DevOps** thought `statsd.gauge('memory', tags: { container_id: container.uuid })` was a great idea  
-- **Frontend** started tracking `statsd.timing('page.load', tags: { user_id: current_user.id })` for 2 million users
-- **Everyone** has their own creative naming conventions: `user_signups`, `user.sign.ups`, `users::signups`, `Users.Signups`
-
-**Congratulations!** 🎉 You now have 50,000+ custom metrics, each [costing real money](https://docs.datadoghq.com/account_management/billing/custom_metrics/), most providing zero actionable insights.
-
-This gem exists to prevent that chaos (and save your engineering budget).
-
-## The Solution: Schema-Driven Metrics
-
-This gem wraps [dogstatsd-ruby](https://github.com/DataDog/dogstatsd-ruby) with two superpowers:
-
-1. **🏷️ Intelligent Tag Merging** - Even without schemas, get consistent tagging across your application
-2. **📋 Schema Validation** - Define your metrics upfront, validate everything, prevent metric explosion
-
-Let's see how this works, starting simple and building up...
-
-## Quick Start: Better Tags Without Schemas
-
-Even before you define schemas, the `Emitter` class immediately improves your metrics with intelligent tag merging:
-
-```ruby
-require 'datadog/statsd/schema'
-
-# Configure global tags that apply to ALL metrics
-Datadog::Statsd::Schema.configure do |config|
-  config.tags = { env: 'production', service: 'web-app', version: '1.2.3' }
-  config.statsd = Datadog::Statsd.new('localhost', 8125)
-end
-
-# Create an emitter for your authentication service
-auth_emitter = Datadog::Statsd::Emitter.new(
-  'AuthService',                           # Automatically becomes emitter:auth_service tag
-  tags: { feature: 'user_auth' }          # These tags go on every metric from this emitter
-)
-
-# Send a metric - watch the tag magic happen
-auth_emitter.increment('login.success', tags: { method: 'oauth' })
-```
-
-**What actually gets sent to Datadog:**
-```ruby
-# Metric: auth_service.login.success
-# Tags: { 
-#   env: 'production',           # From global config
-#   service: 'web-app',          # From global config  
-#   version: '1.2.3',            # From global config
-#   emitter: 'auth_service',     # Auto-generated from first argument
-#   feature: 'user_auth',        # From emitter constructor
-#   method: 'oauth'              # From method call
-# }
-```
-
-**Tag Precedence (method tags win):**
-- Method-level tags override emitter tags
-- Emitter tags override global tags  
-- Global tags are always included
-
-This alone prevents the "different tag patterns everywhere" problem. But we're just getting started...
-
-## Schema Power: Design Your Metrics, Then Code
-
-Here's where this gem really shines. Instead of letting developers create metrics willy-nilly, you define them upfront:
-
-```ruby
-# Define what metrics you actually want
-user_metrics_schema = Datadog::Statsd::Schema.new do
-  namespace :users do
-    # Define the tags you'll actually use (not infinite user_ids!)
-    tags do
-      tag :signup_method, values: %w[email oauth google github]
-      tag :plan_type, values: %w[free premium enterprise]
-      tag :feature_flag, values: %w[enabled disabled]
-    end
-    
-    metrics do
-      # Define exactly which metrics exist and their constraints
-      counter :signups do
-        description "New user registrations"
-        tags required: [:signup_method], allowed: [:plan_type, :feature_flag]
-      end
-      
-      gauge :active_sessions do
-        description "Currently logged in users"  
-        tags allowed: [:plan_type]
-      end
-    end
-  end
-end
-
-# Create an emitter bound to this schema
-user_emitter = Datadog::Statsd::Emitter.new(
-  'UserService',
-  schema: user_metrics_schema,
-  validation_mode: :strict  # Explode on invalid metrics (good for development)
-)
-
-# This works - follows the schema
-user_emitter.increment('signups', tags: { signup_method: 'oauth', plan_type: 'premium' })
-
-# This explodes 💥 - 'facebook' not in allowed signup_method values
-user_emitter.increment('signups', tags: { signup_method: 'facebook' })
-
-# This explodes 💥 - 'user_registrations' metric doesn't exist in schema  
-user_emitter.increment('user_registrations')
-
-# This explodes 💥 - missing required tag signup_method
-user_emitter.increment('signups', tags: { plan_type: 'free' })
-```
-
-**Schema validation catches:**
-- ❌ Metrics that don't exist
-- ❌ Wrong metric types (counter vs gauge vs distribution)  
-- ❌ Missing required tags
-- ❌ Invalid tag values
-- ❌ Tags that aren't allowed on specific metrics
-
-## Progressive Examples: Real-World Schemas
-
-### E-commerce Application Metrics
-
-```ruby
-ecommerce_schema = Datadog::Statsd::Schema.new do
-  # Global transformers for consistent naming
-  transformers do
-    underscore: ->(text) { text.underscore }
-    downcase: ->(text) { text.downcase }
-  end
-  
-  namespace :ecommerce do
-    tags do
-      # Finite set of product categories (not product IDs!)
-      tag :category, values: %w[electronics clothing books home_garden]
-      
-      # Payment methods you actually support
-      tag :payment_method, values: %w[credit_card paypal apple_pay]
-      
-      # Order status progression
-      tag :status, values: %w[pending processing shipped delivered cancelled]
-      
-      # A/B test groups (not test IDs!)
-      tag :checkout_flow, values: %w[single_page multi_step express]
-    end
-    
-    namespace :orders do
-      metrics do
-        counter :created do
-          description "New orders placed"
-          tags required: [:category], allowed: [:payment_method, :checkout_flow]
-        end
-        
-        counter :completed do
-          description "Successfully processed orders"  
-          inherit_tags: "ecommerce.orders.created"  # Reuse tag definition
-          tags required: [:status]
-        end
-        
-        distribution :value do
-          description "Order value distribution in cents"
-          units "cents"
-          tags required: [:category], allowed: [:payment_method]
-        end
-        
-        gauge :processing_queue_size do
-          description "Orders waiting to be processed"
-          # No tags - just a simple queue size metric
-        end
-      end
-    end
-    
-    namespace :inventory do
-      metrics do
-        gauge :stock_level do
-          description "Current inventory levels"
-          tags required: [:category]
-        end
-        
-        counter :restocked do
-          description "Inventory replenishment events"
-          tags required: [:category]
-        end
-      end
-    end
-  end
-end
-
-# Usage in your order processing service
-order_processor = Datadog::Statsd::Emitter.new(
-  'OrderProcessor',
-  schema: ecommerce_schema,
-  metric: 'ecommerce.orders',        # Prefix for all metrics from this emitter
-  tags: { checkout_flow: 'single_page' }
-)
-
-# Process an order - clean, validated metrics
-order_processor.increment('created', tags: { 
-  category: 'electronics', 
-  payment_method: 'credit_card' 
-})
-
-order_processor.distribution('value', 15_99, tags: { 
-  category: 'electronics', 
-  payment_method: 'credit_card' 
-})
-
-order_processor.gauge('processing_queue_size', 12)
-```
-
-### API Performance Monitoring
-
-```ruby
-api_schema = Datadog::Statsd::Schema.new do
-  namespace :api do
-    tags do
-      # HTTP methods you actually handle
-      tag :method, values: %w[GET POST PUT PATCH DELETE]
-      
-      # Standardized controller names (transformed to snake_case)
-      tag :controller, 
-          values: %r{^[a-z_]+$},           # Regex validation
-          transform: [:underscore, :downcase]
-      
-      # Standard HTTP status code ranges
-      tag :status_class, values: %w[2xx 3xx 4xx 5xx]
-      tag :status_code, 
-          type: :integer,
-          validate: ->(code) { (100..599).include?(code) }
-      
-      # Feature flags for A/B testing
-      tag :feature_version, values: %w[v1 v2 experimental]
-    end
-    
-    namespace :requests do
-      metrics do
-        counter :total do
-          description "Total API requests"
-          tags required: [:method, :controller], 
-               allowed: [:status_class, :feature_version]
-        end
-        
-        distribution :duration do
-          description "Request processing time"
-          units "milliseconds"
-          inherit_tags: "api.requests.total"
-          tags required: [:status_code]
-        end
-        
-        histogram :response_size do
-          description "Response payload size distribution"
-          units "bytes"
-          tags required: [:method, :controller]
-        end
-      end
-    end
-    
-    namespace :errors do
-      metrics do
-        counter :total do
-          description "API errors by type"
-          tags required: [:controller, :status_code]
-        end
-      end
-    end
-  end
-end
-
-# Usage in Rails controller concern
-class ApplicationController < ActionController::Base
-  before_action :setup_metrics
-  after_action :track_request
-  
-  private
-  
-  def setup_metrics
-    @api_metrics = Datadog::Statsd::Emitter.new(
-      self.class.name,
-      schema: api_schema, 
-      metric: 'api',
-      validation_mode: Rails.env.production? ? :warn : :strict
-    )
-  end
-  
-  def track_request
-    controller_name = self.class.name.gsub('Controller', '').underscore
-    
-    @api_metrics.increment('requests.total', tags: {
-      method: request.method,
-      controller: controller_name,
-      status_class: "#{response.status.to_s[0]}xx"
-    })
-    
-    @api_metrics.distribution('requests.duration', 
-      request_duration_ms, 
-      tags: {
-        method: request.method,
-        controller: controller_name, 
-        status_code: response.status
-      }
-    )
-  end
-end
-```
-
-## Validation Modes: From Development to Production
-
-The gem supports different validation strategies for different environments:
-
-```ruby
-# Development: Explode on any schema violations
-dev_emitter = Datadog::Statsd::Emitter.new(
-  'MyService',
-  schema: my_schema,
-  validation_mode: :strict  # Raises exceptions
-)
-
-# Staging: Log warnings but continue  
-staging_emitter = Datadog::Statsd::Emitter.new(
-  'MyService', 
-  schema: my_schema,
-  validation_mode: :warn   # Prints to stderr, continues execution
-)
-
-# Production: Drop invalid metrics silently
-prod_emitter = Datadog::Statsd::Emitter.new(
-  'MyService',
-  schema: my_schema, 
-  validation_mode: :drop   # Silently drops invalid metrics
-)
-
-# Emergency: Turn off validation entirely
-emergency_emitter = Datadog::Statsd::Emitter.new(
-  'MyService',
-  schema: my_schema,
-  validation_mode: :off    # No validation at all
-)
-```
-
-## Best Practices: Designing Schemas That Scale
-
-### 🎯 Design Metrics Before Code
-
-```ruby
-# ✅ Good: Design session like this
-session_schema = Datadog::Statsd::Schema.new do
-  namespace :user_sessions do
-    tags do
-      tag :session_type, values: %w[web mobile api]
-      tag :auth_method, values: %w[password oauth sso]
-      tag :plan_tier, values: %w[free premium enterprise]
-    end
-    
-    metrics do
-      counter :started do
-        description "User sessions initiated"
-        tags required: [:session_type], allowed: [:auth_method, :plan_tier]
-      end
-      
-      counter :ended do
-        description "User sessions terminated" 
-        tags required: [:session_type, :auth_method]
-      end
-      
-      distribution :duration do
-        description "How long sessions last"
-        units "minutes"
-        tags required: [:session_type]
-      end
-    end
-  end
-end
-
-# ❌ Bad: Don't do this
-statsd.increment('user_login', tags: { user_id: user.id })           # Infinite cardinality!
-statsd.increment('session_start_web_premium_oauth')                  # Explosion of metric names!
-statsd.gauge('active_users_on_mobile_free_plan_from_usa', 1000)     # Way too specific!
-```
-
-### 🏷️ Tag Strategy: Finite and Purposeful
-
-```ruby
-# ✅ Good: Finite tag values that enable grouping/filtering
-tag :plan_type, values: %w[free premium enterprise]
-tag :region, values: %w[us-east us-west eu-central ap-southeast]
-tag :feature_flag, values: %w[enabled disabled control]
-
-# ❌ Bad: Infinite or high-cardinality tags
-tag :user_id                    # Millions of possible values!
-tag :session_id                 # Unique every time!
-tag :timestamp                  # Infinite values!
-tag :request_path               # Thousands of unique URLs!
-```
-
-### 📊 Metric Types: Choose Wisely
-
-```ruby
-namespace :email_service do
-  metrics do
-    # ✅ Use counters for events that happen
-    counter :sent do
-      description "Emails successfully sent"
-    end
-    
-    # ✅ Use gauges for current state/levels
-    gauge :queue_size do
-      description "Emails waiting to be sent"  
-    end
-    
-    # ✅ Use distributions for value analysis (careful - creates 10 metrics!)
-    distribution :delivery_time do
-      description "Time from send to delivery"
-      units "seconds"
-    end
-    
-    # ⚠️ Use histograms sparingly (creates 5 metrics each)
-    histogram :processing_time do
-      description "Email processing duration" 
-      units "milliseconds"
-    end
-    
-    # ⚠️ Use sets very carefully (tracks unique values)
-    set :unique_recipients do
-      description "Unique email addresses receiving mail"
-    end
-  end
-end
-```
-
-### 🔄 Schema Evolution: Plan for Change
-
-```ruby
-# ✅ Good: Use inherit_tags to reduce duplication
-base_schema = Datadog::Statsd::Schema.new do
-  namespace :payments do
-    tags do
-      tag :payment_method, values: %w[card bank_transfer crypto]
-      tag :currency, values: %w[USD EUR GBP JPY]
-      tag :region, values: %w[north_america europe asia]
-    end
-    
-    metrics do
-      counter :initiated do
-        description "Payment attempts started"
-        tags required: [:payment_method], allowed: [:currency, :region]
-      end
-      
-      counter :completed do
-        description "Successful payments"
-        inherit_tags: "payments.initiated"  # Reuses the tag configuration
-      end
-      
-      counter :failed do
-        description "Failed payment attempts"
-        inherit_tags: "payments.initiated"
-        tags required: [:failure_reason]    # Add specific tags as needed
-      end
-    end
-  end
-end
-```
-
-### 🏗️ Namespace Organization
-
-```ruby
-# ✅ Good: Hierarchical organization by domain
-app_schema = Datadog::Statsd::Schema.new do
-  namespace :ecommerce do
-    namespace :orders do
-      # Order-related metrics
-    end
-    
-    namespace :inventory do  
-      # Stock and fulfillment metrics
-    end
-    
-    namespace :payments do
-      # Payment processing metrics
-    end
-  end
-  
-  namespace :infrastructure do
-    namespace :database do
-      # DB performance metrics  
-    end
-    
-    namespace :cache do
-      # Redis/Memcached metrics
-    end
-  end
-end
-
-# ❌ Bad: Flat namespace chaos
-# orders.created
-# orders_completed  
-# order::cancelled
-# INVENTORY_LOW
-# db.query.time
-# cache_hits
-```
-
-## Advanced Features
-
-### Global Configuration
-
-```ruby
-# Set up global configuration in your initializer
-Datadog::Statsd::Schema.configure do |config|
-  # Global tags applied to ALL metrics
-  config.tags = {
-    env: Rails.env,
-    service: 'web-app',
-    version: ENV['GIT_SHA']&.first(7),
-    datacenter: ENV['DATACENTER'] || 'us-east-1'
-  }
-  
-  # The actual StatsD client
-  config.statsd = Datadog::Statsd.new(
-    ENV['STATSD_HOST'] || 'localhost',
-    ENV['STATSD_PORT'] || 8125,
-    namespace: ENV['STATSD_NAMESPACE'],
-    tags: [], # Don't double-up tags here
-    delay_serialization: true
-  )
-end
-```
-
-### Tag Transformers
-
-```ruby
-schema_with_transforms = Datadog::Statsd::Schema.new do
-  transformers do
-    underscore: ->(text) { text.underscore }
-    downcase: ->(text) { text.downcase }  
-    truncate: ->(text) { text.first(20) }
-  end
-  
-  namespace :user_actions do
-    tags do
-      # Controller names get normalized automatically
-      tag :controller,
-          values: %r{^[a-z_]+$},
-          transform: [:underscore, :downcase]  # Applied in order
-      
-      # Action names also get cleaned up  
-      tag :action,
-          values: %w[index show create update destroy],
-          transform: [:downcase]
-    end
-  end
-end
-
-# "UserSettingsController" becomes "user_settings_controller"
-# "CreateUser" becomes "create_user" 
-```
-
-### Complex Validation
-
-```ruby
-advanced_schema = Datadog::Statsd::Schema.new do
-  namespace :financial do
-    tags do
-      # Custom validation with lambdas
-      tag :amount_bucket,
-          validate: ->(value) { %w[small medium large].include?(value) }
-      
-      # Regex validation for IDs
-      tag :transaction_type,
-          values: %r{^[A-Z]{2,4}_[0-9]{3}$}  # Like "AUTH_001", "REFUND_042"
-      
-      # Type validation  
-      tag :user_segment,
-          type: :integer,
-          validate: ->(segment) { (1..10).include?(segment) }
-    end
-  end
-end
-```
-
-### Loading Schemas from Files
-
-```ruby
-# config/metrics_schema.rb  
-Datadog::Statsd::Schema.new do
-  namespace :my_app do
-    # ... schema definition
-  end  
-end
-
-# In your application
-schema = Datadog::Statsd::Schema.load_file('config/metrics_schema.rb')
-```
+- **Schema Definition**: Define metric schemas with type safety and validation
+- **Tag Management**: Centralized tag definitions with inheritance and validation
+- **Cost Analysis**: Analyze potential custom metric costs before deployment
+- **Metric Validation**: Runtime validation of metrics against defined schemas
+- **CLI Tools**: Command-line interface for schema analysis and validation
+- **Global Configuration**: Centralized configuration for tags and StatsD clients
 
 ## Installation
 
-Add to your Gemfile:
+Add this line to your application's Gemfile:
 
 ```ruby
 gem 'datadog-statsd-schema'
 ```
 
-Or install directly:
+And then execute:
+
+```bash
+bundle install
+```
+
+Or install it yourself as:
 
 ```bash
 gem install datadog-statsd-schema
 ```
 
-## The Bottom Line
+## Quick Start
 
-This gem transforms Datadog custom metrics from a "wild west" free-for-all into a disciplined, cost-effective observability strategy:
+### Basic Schema Definition
 
-- **🎯 Intentional Metrics**: Define what you measure before you measure it
-- **💰 Cost Control**: Prevent infinite cardinality and metric explosion  
-- **🏷️ Consistent Tagging**: Global and hierarchical tag management
-- **🔍 Better Insights**: Finite tag values enable proper aggregation and analysis
-- **👥 Team Alignment**: Schema serves as documentation and contract
+```ruby
+require 'datadog/statsd/schema'
 
-Stop the metric madness. Start with a schema.
+# Define your metrics schema
+schema = Datadog::Statsd::Schema.new do
+  namespace :web do
+    tags do
+      tag :environment, values: %w[production staging development]
+      tag :service, values: %w[api web worker]
+      tag :region, values: %w[us-east-1 us-west-2]
+    end
 
----
+    metrics do
+      counter :requests_total do
+        description "Total HTTP requests"
+        tags required: [:environment, :service], allowed: [:region]
+      end
+
+      gauge :memory_usage do
+        description "Memory usage in bytes"
+        tags required: [:environment], allowed: [:service, :region]
+      end
+
+      distribution :request_duration do
+        description "Request processing time in milliseconds"
+        tags required: [:environment, :service]
+      end
+    end
+  end
+end
+```
+
+### Using the Emitter with Schema Validation
+
+```ruby
+# Configure global settings
+Datadog::Statsd::Schema.configure do |config|
+  config.statsd = Datadog::Statsd.new('localhost', 8125)
+  config.schema = schema
+  config.tags = { environment: 'production' }
+end
+
+# Create an emitter with validation
+emitter = Datadog::Statsd::Emitter.new(
+  schema: schema,
+  validation_mode: :strict  # :strict, :warn, or :disabled
+)
+
+# Send metrics with automatic validation
+emitter.increment('web.requests_total', tags: { service: 'api', region: 'us-east-1' })
+emitter.gauge('web.memory_usage', 512_000_000, tags: { service: 'api' })
+emitter.distribution('web.request_duration', 45.2, tags: { service: 'api' })
+```
+
+## CLI Usage
+
+The gem provides a command-line interface for analyzing schemas and understanding their cost implications.
+
+### Installation
+
+After installing the gem, the `dss` (Datadog StatsD Schema) command will be available:
+
+```bash
+dss --help
+```
+
+### Schema Analysis
+
+Create a schema file (e.g., `metrics_schema.rb`):
+
+```ruby
+namespace :web do
+  tags do
+    tag :environment, values: %w[production staging development]
+    tag :service, values: %w[api web worker]
+    tag :region, values: %w[us-east-1 us-west-2 eu-west-1]
+  end
+
+  namespace :requests do
+    metrics do
+      counter :total do
+        description "Total HTTP requests"
+        tags required: [:environment, :service], allowed: [:region]
+      end
+
+      distribution :duration do
+        description "Request processing time in milliseconds"
+        inherit_tags "web.requests.total"
+      end
+    end
+  end
+
+  metrics do
+    gauge :memory_usage do
+      description "Memory usage in bytes"
+      tags required: [:environment], allowed: [:service]
+    end
+  end
+end
+```
+
+Analyze the schema to understand metric costs:
+
+```bash
+dss analyze --file metrics_schema.rb
+```
+
+**Output:**
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Detailed Metric Analysis:                                                                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  • gauge('web.memory_usage')
+    Expanded names:
+      • web.memory_usage.count
+      • web.memory_usage.min
+      • web.memory_usage.max
+      • web.memory_usage.sum
+      • web.memory_usage.avg
+
+                              Unique tags:   2
+                         Total tag values:   6
+                    Possible combinations:  45
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+
+  • counter('web.requests.total')
+
+                              Unique tags:   3
+                         Total tag values:   9
+                    Possible combinations:  27
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+
+  • distribution('web.requests.duration')
+    Expanded names:
+      • web.requests.duration.count
+      • web.requests.duration.min
+      • web.requests.duration.max
+      • web.requests.duration.sum
+      • web.requests.duration.avg
+      • web.requests.duration.p50
+      • web.requests.duration.p75
+      • web.requests.duration.p90
+      • web.requests.duration.p95
+      • web.requests.duration.p99
+
+                              Unique tags:   3
+                         Total tag values:   9
+                    Possible combinations: 270
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Schema Analysis Results:                                                                     │
+│                                        SUMMARY                                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+                     Total unique metrics:  16
+Total possible custom metric combinations: 342
+```
+
+This analysis shows that your schema will generate **342 custom metrics** across **16 unique metric names**. Understanding this before deployment helps prevent unexpected Datadog billing surprises.
+
+## Advanced Features
+
+### Tag Inheritance
+
+Metrics can inherit tag configurations from other metrics to reduce duplication:
+
+```ruby
+namespace :api do
+  metrics do
+    counter :requests_total do
+      tags required: [:environment, :service], allowed: [:region]
+    end
+
+    # Inherits environment, service (required) and region (allowed) from requests_total
+    distribution :request_duration do
+      inherit_tags "api.requests_total"
+      tags required: [:endpoint]  # Adds endpoint as additional required tag
+    end
+  end
+end
+```
+
+### Nested Namespaces
+
+Organize metrics hierarchically with nested namespaces:
+
+```ruby
+namespace :application do
+  tags do
+    tag :environment, values: %w[prod staging dev]
+  end
+
+  namespace :database do
+    tags do
+      tag :table_name, values: %w[users orders products]
+    end
+
+    metrics do
+      counter :queries_total
+      distribution :query_duration
+    end
+  end
+
+  namespace :cache do
+    tags do
+      tag :cache_type, values: %w[redis memcached]
+    end
+
+    metrics do
+      counter :hits_total
+      counter :misses_total
+    end
+  end
+end
+```
+
+### Validation Modes
+
+Control how validation errors are handled:
+
+```ruby
+# Strict mode: Raises exceptions on validation failures
+emitter = Datadog::Statsd::Emitter.new(schema: schema, validation_mode: :strict)
+
+# Warn mode: Logs warnings but continues execution
+emitter = Datadog::Statsd::Emitter.new(schema: schema, validation_mode: :warn)
+
+# Disabled: No validation (production default)
+emitter = Datadog::Statsd::Emitter.new(schema: schema, validation_mode: :disabled)
+```
+
+### Global Configuration
+
+Set up global defaults for your application:
+
+```ruby
+Datadog::Statsd::Schema.configure do |config|
+  config.statsd = Datadog::Statsd.new(
+    ENV['DATADOG_AGENT_HOST'] || 'localhost',
+    ENV['DATADOG_AGENT_PORT'] || 8125
+  )
+  config.schema = schema
+  config.tags = {
+    environment: ENV['RAILS_ENV'],
+    service: 'my-application',
+    version: ENV['APP_VERSION']
+  }
+end
+
+# These global tags are automatically added to all metrics
+emitter = Datadog::Statsd::Emitter.new
+emitter.increment('user.signup')  # Automatically includes global tags
+```
+
+## Cost Control and Best Practices
+
+### Understanding Metric Expansion
+
+Different metric types create different numbers of time series:
+
+- **Counter/Set**: 1 time series per unique tag combination
+- **Gauge**: 5 time series (count, min, max, sum, avg)
+- **Distribution/Histogram**: 10 time series (count, min, max, sum, avg, p50, p75, p90, p95, p99)
+
+### Tag Value Limits
+
+Be mindful of tag cardinality:
+
+```ruby
+# High cardinality - avoid
+tag :user_id, type: :string  # Could be millions of values
+
+# Better approach - use bucketing
+tag :user_tier, values: %w[free premium enterprise]
+tag :user_cohort, values: %w[new_user returning_user power_user]
+```
+
+### Schema Validation
+
+Always validate your schema before deployment:
+
+```ruby
+# Check for common issues
+errors = schema.validate
+if errors.any?
+  puts "Schema validation errors:"
+  errors.each { |error| puts "  - #{error}" }
+end
+```
+
+## Integration Examples
+
+### Rails Integration
+
+```ruby
+# config/initializers/datadog_statsd.rb
+schema = Datadog::Statsd::Schema.load_file(Rails.root.join('config/metrics_schema.rb'))
+
+Datadog::Statsd::Schema.configure do |config|
+  config.statsd = Datadog::Statsd.new
+  config.schema = schema
+  config.tags = {
+    environment: Rails.env,
+    service: 'my-rails-app'
+  }
+end
+
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  before_action :setup_metrics
+
+  private
+
+  def setup_metrics
+    @metrics = Datadog::Statsd::Emitter.new(
+      validation_mode: Rails.env.production? ? :disabled : :warn
+    )
+  end
+end
+```
+
+### Background Job Monitoring
+
+```ruby
+class OrderProcessingJob
+  def perform(order_id)
+    metrics = Datadog::Statsd::Emitter.new
+    
+    start_time = Time.current
+    
+    begin
+      process_order(order_id)
+      metrics.increment('jobs.order_processing.success', tags: { queue: 'orders' })
+    rescue => error
+      metrics.increment('jobs.order_processing.failure', 
+                       tags: { queue: 'orders', error_type: error.class.name })
+      raise
+    ensure
+      duration = Time.current - start_time
+      metrics.distribution('jobs.order_processing.duration', duration * 1000,
+                          tags: { queue: 'orders' })
+    end
+  end
+end
+```
+
+## Development
+
+After checking out the repo, run:
+
+```bash
+bin/setup     # Install dependencies
+bundle exec rake spec  # Run tests
+```
+
+To install this gem onto your local machine:
+
+```bash
+bundle exec rake install
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at [https://github.com/kigster/datadog-statsd-schema](https://github.com/kigster/datadog-statsd-schema)
+Bug reports and pull requests are welcome on GitHub at https://github.com/kigster/datadog-statsd-schema.
 
 ## License
 
