@@ -141,63 +141,12 @@ end
 Analyze the schema to understand metric costs:
 
 ```bash
-dss analyze --file metrics_schema.rb
+dss analyze --file metrics_schema.rb --color
 ```
 
 **Output:**
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Detailed Metric Analysis:                                                                    │
-└──────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  • gauge('web.memory_usage')
-    Expanded names:
-      • web.memory_usage.count
-      • web.memory_usage.min
-      • web.memory_usage.max
-      • web.memory_usage.sum
-      • web.memory_usage.avg
-
-                              Unique tags:   2
-                         Total tag values:   6
-                    Possible combinations:  45
-
- ──────────────────────────────────────────────────────────────────────────────────────────────
-
-  • counter('web.requests.total')
-
-                              Unique tags:   3
-                         Total tag values:   9
-                    Possible combinations:  27
-
- ──────────────────────────────────────────────────────────────────────────────────────────────
-
-  • distribution('web.requests.duration')
-    Expanded names:
-      • web.requests.duration.count
-      • web.requests.duration.min
-      • web.requests.duration.max
-      • web.requests.duration.sum
-      • web.requests.duration.avg
-      • web.requests.duration.p50
-      • web.requests.duration.p75
-      • web.requests.duration.p90
-      • web.requests.duration.p95
-      • web.requests.duration.p99
-
-                              Unique tags:   3
-                         Total tag values:   9
-                    Possible combinations: 270
-
- ──────────────────────────────────────────────────────────────────────────────────────────────
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Schema Analysis Results:                                                                     │
-│                                        SUMMARY                                               │
-└──────────────────────────────────────────────────────────────────────────────────────────────┘
-
-                     Total unique metrics:  16
-Total possible custom metric combinations: 342
-```
+![output](./docs/img/dss-analyze.png)
 
 This analysis shows that your schema will generate **342 custom metrics** across **16 unique metric names**. Understanding this before deployment helps prevent unexpected Datadog billing surprises.
 
