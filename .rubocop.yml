@@ -6,6 +6,7 @@ plugins:
 AllCops:
   TargetRubyVersion: 3.1
   NewCops: enable
+  SuggestExtensions: false
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
@@ -23,4 +24,7 @@ Layout/LineLength:
   Enabled: false
 
 Style/Documentation:
+  Enabled: false
+
+Metrics/MethodLength:
   Enabled: false

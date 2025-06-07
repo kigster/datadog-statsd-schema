@@ -9,6 +9,8 @@ require_relative "schema/tag_definition"
 require_relative "schema/metric_definition"
 require_relative "schema/namespace"
 require_relative "schema/schema_builder"
+require_relative "schema/analyzer"
+require_relative "schema/cli"
 require_relative "emitter"
 
 # @author Konstantin Gredeskoul @ https://github.com/kigster

@@ -1,3 +1,4 @@
+# rubocop:disable Gemspec/DevelopmentDependencies
 # frozen_string_literal: true
 
 require_relative "lib/datadog/statsd/schema/version"
@@ -35,6 +36,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activesupport"
   spec.add_dependency "colored2"
   spec.add_dependency "dogstatsd-ruby"
+  spec.add_dependency "dry-cli"
   spec.add_dependency "dry-schema"
   spec.add_dependency "dry-struct"
   spec.add_dependency "dry-types"
@@ -48,3 +50,5 @@ Gem::Specification.new do |spec|
   # guide at: https://bundler.io/guides/creating_gem.html
   spec.metadata["rubygems_mfa_required"] = "true"
 end
+
+# rubocop:enable Gemspec/DevelopmentDependencies

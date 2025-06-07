@@ -27,7 +27,7 @@ module Datadog
       # @author Datadog Team
       # @since 0.1.0
       class Namespace < Dry::Struct
-        # Include the types module for easier access to Dry::Types
+        # Include the types module for easier access to Dry::Typesa
         module Types
           include Dry.Types()
         end
