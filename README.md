@@ -311,38 +311,139 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-### Background Job Monitoring
+### Background Job Monitoring & Metaprogramming FTW
+
+In this example, a job monitors itself by submitting a relevant statsd metrics:
 
 ```ruby
 class OrderProcessingJob
+  QUEUE = 'orders'.freeze
+
+  include Sidekiq::Job
+  sidekiq_options queue: QUEUE
+
   def perform(order_id)
-    metrics = Datadog::Statsd::Emitter.new
-    
     start_time = Time.current
     
     begin
       process_order(order_id)
-      metrics.increment('jobs.order_processing.success', tags: { queue: 'orders' })
+      emitter.increment('order_processing.success')
     rescue => error
-      metrics.increment('jobs.order_processing.failure', 
-                       tags: { queue: 'orders', error_type: error.class.name })
+      emitter.increment(
+        'order_processing.failure', 
+        tags: { error_type: error.class.name }
+      )
       raise
     ensure
       duration = Time.current - start_time
-      metrics.distribution('jobs.order_processing.duration', duration * 1000,
-                          tags: { queue: 'orders' })
+      emitter.distribution(
+        'jobs.order_processing.duration', 
+        duration * 1000
+      )
+    end
+  end
+
+  def emitter
+    @emitter ||= Datadog::Statsd::Emitter.new(
+      self, 
+      metric: 'jobs', 
+      tags: { queue: QUEUE }
+    )
+  end
+end
+```
+
+However, you can see that doing this in each job is not practical. Therefore the first question that should be on our mind is — how do we make it so that this behavior would automatically apply to any Job we create?
+
+#### A More General Example
+
+The qustion postulated above is — can we come up with a class design patter that allows us to write this code once and forget about it?
+
+Let's take Ruby's metaprogramming for a spin.
+
+One of the most flexible methods to add functionality to all jobs is to create a module that the job classes include *instead of* the implementation-specific `Sidekiq::Job`.
+
+So let's create our own module, let's call it `BackgroundWorker`, that we'll include into our classes instead. Once created, we'd like for our job classes to look like this:
+
+```ruby
+class OrderProcessingJob
+  include BackgroundWorker
+  sidekiq_options queue: 'orders'
+  
+  def perform(order_id)
+    # perform the work for the given order ID
+  end
+end
+```
+
+So our module, when included, should:
+
+* include `Sidekiq::Job` as well
+* define the `emitter` method so that it's available to all Job instances
+* wrap `perform` method in the exception handling block that emits corresponding metrics as in our example before.
+
+The only tricky part here is the last one: wrapping `perform` method in some shared code. This used to require "monkey patching", but no more. These days Ruby gives us an all-powerful `prepend` method that does exactly what we need. So, without furether ado, here we go:
+
+```ruby
+module BackgroundWorker
+  class << self
+    def included(klass)
+      klass.include(Sidekiq::Job)
+      klass.prepend(InstanceMethods)
+    end
+
+    module InstanceMethods
+      def perform(...)
+        start_time = Time.current
+        tags = {}
+        error = nil
+
+        begin
+          super(...)
+          emitter.increment("#{metric_name}.success")
+        rescue => error
+          tags.merge!({ error_type: error.class.name } )
+          emitter.increment("#{metric_name}.failure", tags:)
+          raise
+        ensure
+          duration = Time.current - start_time
+          emitter.distribution(
+            "#{metric_name}.duration", 
+            duration * 1000,
+            tags:
+          )
+        end
+      end
+
+      def metric_name
+        # Turn OrderProcessingJob into "order_processing"
+        @metric_name ||= self.class.name.underscore.gsub(/_job$/, '')
+      end
+        
+      def emitter
+        @emitter ||= Datadog::Statsd::Emitter.new(
+          self, 
+          metric: 'jobs', 
+          tags: { queue: sidekiq_options[:queue] }
+        )
+      end
     end
   end
 end
 ```
+
+> [!TIP] In a nutshell, we created a reusable module that, upon being included into any Job class, provides 
+> reliable tracking of job successes and failures, as well as the duration. The duration can be graphed for
+> all successful jobs by ensuring the tag `error_type` does not exist. 
 
 ## Development
 
 After checking out the repo, run:
 
 ```bash
-bin/setup     # Install dependencies
-bundle exec rake spec  # Run tests
+bin/setup              # Install dependencies
+bundle exec rspec      # Run Specs
+bundle exec rubocop    # Run Rubocop
 ```
 
 To install this gem onto your local machine:
