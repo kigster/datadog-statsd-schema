@@ -432,7 +432,7 @@ module BackgroundWorker
 end
 ```
 
-> [!TIP] In a nutshell, we created a reusable module that, upon being included into any Job class, provides 
+> ![TIP] In a nutshell, we created a reusable module that, upon being included into any Job class, provides 
 > reliable tracking of job successes and failures, as well as the duration. The duration can be graphed for
 > all successful jobs by ensuring the tag `error_type` does not exist. 
 
