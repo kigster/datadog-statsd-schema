@@ -280,7 +280,9 @@ if errors.any?
 end
 ```
 
-## Integration Examples: Sidekiq Job Monitoring
+## Integration Examples
+
+### Sidekiq Job Monitoring
 
 Imagine that we are building a Rails application, and we prefer to create our own tracking of the jobs performed, failed, succeeded, as well as their duration. 
 
@@ -304,7 +306,7 @@ Datadog::Statsd::Schema.configure do |config|
 end
 ```
 
-## Adding Statsd Tracking to a Worker
+#### Adding Statsd Tracking to a Worker
 
 In this example, a job monitors itself by submitting a relevant statsd metrics:
 
@@ -361,7 +363,7 @@ The above Emitter will generate the following metrics:
 
 However, you can see that doing this in each job is not practical. Therefore the first question that should be on our mind is — how do we make it so that this behavior would automatically apply to any Job we create?
 
-## Tracking All Sidekiq Workers At Once
+#### Tracking All Sidekiq Workers At Once
 
 The qustion postulated above is — can we come up with a class design patter that allows us to write this code once and forget about it?
 
@@ -401,6 +403,8 @@ are easy to understand, the question begs: do we really need to insert the job's
 
 The truth is — there is! Why create 7 unique metrics **per job** when we can simply submit the same metrics for all jobs, tagged with our job's class name as an "emitter" source?
 
+#### Module for including into Backround Worker
+
 So, without furether ado, here we go:
 
 ```ruby
@@ -436,9 +440,11 @@ module BackgroundWorker
 
       def emitter
         @emitter ||= Datadog::Statsd::Emitter.new(
-          self.class.name.underscore.gsub(/_job$/, ''), 
           metric: 'sidekiq.job', 
-          tags: { queue: sidekiq_options[:queue] }
+          tags: { 
+            queue: sidekiq_options[:queue], 
+            job: self.class.name 
+          }
         )
       end
     end
@@ -461,10 +467,10 @@ The above Emitter will generate the following metrics:
  * `sidekiq.job.duration.sum`
  * `sidekiq.job.duration.avg`
 
-that will be tagged with:
+that will be tagged with the following tags:
 
 * `queue:       ... `
-* `emitter:     { 'order_processing' | ... }`
+* `job:         { 'OrderProcessingJob' | ... }`
 * `environment: { "production" | "staging" | "development" }`
 * `service:     'my-rails-app'`
 * `version:     { "git-sha" }`
