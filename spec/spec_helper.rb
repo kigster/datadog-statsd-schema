@@ -20,11 +20,11 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
-
-  config.after :all do
-    `chmod -R 777 coverage`
-  end
 end
 
 # Load shared examples
 Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
+
+at_exit do
+  `chmod -R 777 coverage`
+end

@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+# vim: ft=ruby
+
 namespace "marathon" do
   tags do
     tag :course, values: %w[sf-marathon new-york austin]

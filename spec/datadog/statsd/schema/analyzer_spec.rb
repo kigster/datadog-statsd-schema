@@ -55,7 +55,7 @@ RSpec.describe Datadog::Statsd::Schema::Analyzer do
 
     let(:stdout) { StringIO.new }
     let(:stderr) { StringIO.new }
-    let(:analyzer) { described_class.new([schema], stdout: stdout, stderr: stderr) }
+    let(:analyzer) { described_class.new([schema], stdout: stdout, stderr: stderr, format: :text) }
 
     it "calculates correct analysis results" do
       result = analyzer.analyze
@@ -64,39 +64,39 @@ RSpec.describe Datadog::Statsd::Schema::Analyzer do
       expect(result.metrics_analysis.size).to eq(4)
 
       # Test counter metric (no expansion) - web.requests.total
-      requests_metric = result.metrics_analysis.find { |m| m.metric_name == "web.requests.total" }
-      expect(requests_metric.metric_type).to eq(:counter)
-      expect(requests_metric.expanded_names).to eq(["web.requests.total"])
-      expect(requests_metric.unique_tags).to eq(2) # environment, service
-      expect(requests_metric.unique_tag_values).to eq(5) # 3 env + 2 service
-      expect(requests_metric.total_combinations).to eq(6) # 3 * 2 * 1 expansion
+      requests_metric = result.metrics_analysis.find { |m| m[:metric_name] == "web.requests.total" }
+      expect(requests_metric[:metric_type]).to eq(:counter)
+      expect(requests_metric[:expanded_names]).to eq(["web.requests.total"])
+      expect(requests_metric[:unique_tags]).to eq(2) # environment, service
+      expect(requests_metric[:unique_tag_values]).to eq(5) # 3 env + 2 service
+      expect(requests_metric[:total_combinations]).to eq(6) # 3 * 2 * 1 expansion
 
       # Test gauge metric (5 expansions) - web.memory_usage
       # Inherits from web.requests.total (env + service) + allows region
-      memory_metric = result.metrics_analysis.find { |m| m.metric_name == "web.memory_usage" }
-      expect(memory_metric.metric_type).to eq(:gauge)
-      expect(memory_metric.expanded_names.size).to eq(5) # count, min, max, sum, avg
-      expect(memory_metric.unique_tags).to eq(3) # environment, service (inherited), region (allowed)
-      expect(memory_metric.unique_tag_values).to eq(7) # 3 env + 2 service + 2 region
-      expect(memory_metric.total_combinations).to eq(60) # 3 * 2 * 2 * 5 expansions
+      memory_metric = result.metrics_analysis.find { |m| m[:metric_name] == "web.memory_usage" }
+      expect(memory_metric[:metric_type]).to eq(:gauge)
+      expect(memory_metric[:expanded_names].size).to eq(5) # count, min, max, sum, avg
+      expect(memory_metric[:unique_tags]).to eq(3) # environment, service (inherited), region (allowed)
+      expect(memory_metric[:unique_tag_values]).to eq(7) # 3 env + 2 service + 2 region
+      expect(memory_metric[:total_combinations]).to eq(60) # 3 * 2 * 2 * 5 expansions
 
       # Test distribution metric (10 expansions) - web.requests.response_time
       # Inherits from web.requests.total (env + service) + requires region
-      response_metric = result.metrics_analysis.find { |m| m.metric_name == "web.requests.response_time" }
-      expect(response_metric.metric_type).to eq(:distribution)
-      expect(response_metric.expanded_names.size).to eq(10) # count, min, max, sum, avg, p50, p75, p90, p95, p99
-      expect(response_metric.unique_tags).to eq(3) # environment, service (inherited), region (required)
-      expect(response_metric.unique_tag_values).to eq(7) # 3 env + 2 service + 2 region
-      expect(response_metric.total_combinations).to eq(120) # 3 * 2 * 2 * 10 expansions
+      response_metric = result.metrics_analysis.find { |m| m[:metric_name] == "web.requests.response_time" }
+      expect(response_metric[:metric_type]).to eq(:distribution)
+      expect(response_metric[:expanded_names].size).to eq(10) # count, min, max, sum, avg, p50, p75, p90, p95, p99
+      expect(response_metric[:unique_tags]).to eq(3) # environment, service (inherited), region (required)
+      expect(response_metric[:unique_tag_values]).to eq(7) # 3 env + 2 service + 2 region
+      expect(response_metric[:total_combinations]).to eq(120) # 3 * 2 * 2 * 10 expansions
 
       # Test histogram metric (10 expansions) - web.cache.hit_duration
       # Inherits from web.requests.total (env + service) + requires cache_type
-      cache_metric = result.metrics_analysis.find { |m| m.metric_name == "web.cache.hit_duration" }
-      expect(cache_metric.metric_type).to eq(:histogram)
-      expect(cache_metric.expanded_names.size).to eq(5)
-      expect(cache_metric.unique_tags).to eq(3) # environment, service (inherited), cache_type (required)
-      expect(cache_metric.unique_tag_values).to eq(7) # 3 env + 2 service + 2 cache_type
-      expect(cache_metric.total_combinations).to eq(60) # 3 * 2 * 2 * 50 expansions
+      cache_metric = result.metrics_analysis.find { |m| m[:metric_name] == "web.cache.hit_duration" }
+      expect(cache_metric[:metric_type]).to eq(:histogram)
+      expect(cache_metric[:expanded_names].size).to eq(5)
+      expect(cache_metric[:unique_tags]).to eq(3) # environment, service (inherited), cache_type (required)
+      expect(cache_metric[:unique_tag_values]).to eq(7) # 3 env + 2 service + 2 cache_type
+      expect(cache_metric[:total_combinations]).to eq(60) # 3 * 2 * 2 * 50 expansions
 
       # Test totals
       expect(result.total_unique_metrics).to eq(21)

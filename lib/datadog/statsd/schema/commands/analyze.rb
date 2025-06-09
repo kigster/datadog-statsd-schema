@@ -18,7 +18,8 @@ module Datadog
           desc "Analyze a schema file for metrics and validation"
 
           option :file, aliases: %w[-f], type: :string, required: true, desc: "Path to the schema file to analyze"
-          option :color, aliases: %w[-c], type: :boolean, required: false, desc: "Enable/Disable color output"
+          option :color, aliases: %w[-c], type: :boolean, required: false, desc: "Enable/Disable color output", default: true
+          option :format, aliases: %w[-o], type: :string, required: false, desc: "Output format, supports: json, yaml, text", default: :text
 
           # @description Analyze a schema file for metrics and validation
           # @param options [Hash] The options for the command
@@ -34,16 +35,26 @@ module Datadog
               exit 1
             end
 
-            warn "Analyzing schema file: #{file}, color: #{options[:color]}"
+            warn "Analyzing Schema File:"
+            warn " • file   #{file.green}"
+            warn " • color: #{(options[:color] ? "enabled" : "disabled").yellow}"
+            warn " • formar #{options[:format].to_s.red}"
             @schema = ::Datadog::Statsd::Schema.load_file(file)
             ::Datadog::Statsd::Schema::Analyzer.new([@schema],
+                                                    format: (options[:format] || :text).to_sym,
                                                     stdout: self.class.stdout,
                                                     stderr: self.class.stderr,
-                                                    color: options[:color]).analyze
+                                                    color: options[:color]).tap do |analyzer|
+                                                      puts analyzer.render
+                                                    end.analyze
           end
 
-          def warn(message)
-            self.class.stderr.puts message
+          def warn(...)
+            self.class.stderr.puts(...)
+          end
+
+          def puts(...)
+            self.class.stdout.puts(...)
           end
         end
       end
