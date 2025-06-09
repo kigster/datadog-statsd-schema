@@ -2,6 +2,7 @@
 
 require "bundler/gem_tasks"
 require "rspec/core/rake_task"
+require "rubocop/rake_task"
 require "timeout"
 
 def shell(*args)
@@ -26,4 +27,7 @@ task build: :permissions
 
 RSpec::Core::RakeTask.new(:spec)
 
-task default: :spec
+RuboCop::RakeTask.new(:rubocop)
+
+# Define the default task to include both
+task default: %i[spec rubocop]
