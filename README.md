@@ -267,6 +267,9 @@ tag :user_tier, values: %w[free premium enterprise]
 tag :user_cohort, values: %w[new_user returning_user power_user]
 ```
 
+> [!CAUTION]
+> Be mindful of the number of tags and tag values your schema allows.
+
 ### Schema Validation
 
 Always validate your schema before deployment:
@@ -286,7 +289,7 @@ end
 
 Imagine that we are building a Rails application, and we prefer to create our own tracking of the jobs performed, failed, succeeded, as well as their duration. 
 
-> ![TIP] 
+> [!TIP] 
 > A very similar approach would work for tracking eg. requests coming to the `ApplicationController` subclasses.
 
 First, let's initialize the schema from a file (we'll dive into the schema a bit later):
