@@ -25,6 +25,4 @@ end
 # Load shared examples
 Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
 
-at_exit do
-  `chmod -R 777 coverage`
-end
+system('bash -c "sleep 5 && [[ -d coverage ]] && chmod -R 777 coverage" &')
