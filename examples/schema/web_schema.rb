@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+# vim: ft=ruby
+
 namespace :web do
   tags do
     tag :environment, values: %w[production staging development]
@@ -9,7 +13,7 @@ namespace :web do
     metrics do
       counter :total do
         description "Total HTTP requests"
-        tags required: [:environment, :service], allowed: [:region]
+        tags required: %i[environment service], allowed: %i[region]
       end
 
       distribution :duration do
@@ -22,7 +26,7 @@ namespace :web do
   metrics do
     gauge :memory_usage do
       description "Memory usage in bytes"
-      tags required: [:environment], allowed: [:service]
+      tags required: %i[environment], allowed: %i[service]
     end
   end
 end

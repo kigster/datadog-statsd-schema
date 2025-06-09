@@ -8,7 +8,7 @@ module Datadog
     module Schema
       # Current version of the datadog-statsd-schema gem
       # @return [String] The semantic version string
-      VERSION = "0.2.0"
+      VERSION = "0.2.1"
     end
   end
 end

@@ -2,6 +2,10 @@
 
 require "stringio"
 require "colored2"
+require "forwardable"
+require "json"
+require "yaml"
+
 module Datadog
   class Statsd
     module Schema
@@ -49,39 +53,64 @@ module Datadog
           histogram: %w[count min max sum avg]
         }.freeze
 
-        attr_reader :schemas, :stdout, :stderr, :color
+        attr_reader :schemas, :stdout, :stderr, :color, :format, :analysis_result
+
+        SUPPORTED_FORMATS = %i[text json yaml].freeze
 
         # Initialize analyzer with schema(s)
         # @param schemas [Datadog::Statsd::Schema::Namespace, Array<Datadog::Statsd::Schema::Namespace>]
         #   Single schema or array of schemas to analyze
-        def initialize(schemas, stdout: $stdout, stderr: $stderr, color: true)
+        def initialize(
+          schemas,
+          stdout: $stdout,
+          stderr: $stderr,
+          color: true,
+          format: SUPPORTED_FORMATS.first
+        )
           @schemas = Array(schemas)
           @stdout = stdout
           @stderr = stderr
           @color = color
+          @format = format.to_sym
+
+          raise ArgumentError, "Unsupported format: #{format}. Supported formats are: #{SUPPORTED_FORMATS.join(", ")}" unless SUPPORTED_FORMATS.include?(format)
+
           if color
             Colored2.enable!
           else
             Colored2.disable!
           end
+
+          @analysis_result = analyze
         end
 
         # Perform comprehensive analysis of the schemas
         # @return [AnalysisResult] Complete analysis results
         def analyze
           all_metrics = collect_all_metrics
-          metrics_analysis = analyze_metrics(all_metrics)
+          metrics_analysis = analyze_metrics(all_metrics).map(&:to_h)
 
-          total_unique_metrics = metrics_analysis.sum { |analysis| analysis.expanded_names.size }
-          total_possible_custom_metrics = metrics_analysis.sum(&:total_combinations)
-
-          stdout.puts format_analysis_output(metrics_analysis, total_unique_metrics, total_possible_custom_metrics)
+          total_unique_metrics = metrics_analysis.sum { |analysis| analysis[:expanded_names].size }
+          total_possible_custom_metrics = metrics_analysis.sum { |e| e[:total_combinations] }
 
           AnalysisResult.new(
-            total_unique_metrics: total_unique_metrics,
-            metrics_analysis: metrics_analysis,
-            total_possible_custom_metrics: total_possible_custom_metrics
+            total_unique_metrics:,
+            metrics_analysis:,
+            total_possible_custom_metrics:
           )
+        end
+
+        def render
+          case format
+          when :text
+            TextFormatter.new(stdout:, stderr:, color:, analysis_result:).render
+          when :json
+            JSONFormatter.new(stdout:, stderr:, color:, analysis_result:).render
+          when :yaml
+            YAMLFormatter.new(stdout:, stderr:, color:, analysis_result:).render
+          else
+            raise ArgumentError, "Unsupported format: #{format}. Supported formats are: #{SUPPORTED_FORMATS.join(", ")}"
+          end
         end
 
         private
@@ -327,69 +356,120 @@ module Datadog
           end
         end
 
-        # Format the analysis output for display
-        # @param metrics_analysis [Array<MetricAnalysis>] All metric analyses
-        # @param total_unique_metrics [Integer] Total unique metrics
-        # @param total_possible_custom_metrics [Integer] Total possible combinations
-        # @return [String] Formatted output
-        def format_analysis_output(
-          metrics_analysis,
-          total_unique_metrics,
-          total_possible_custom_metrics
-        )
-          output = StringIO.new
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        # Formatter classes
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        class BaseFormatter
+          attr_reader :stdout, :stderr, :color,
+                      :analysis_result,
+                      :total_unique_metrics,
+                      :metrics_analysis,
+                      :total_possible_custom_metrics
 
-          format_metric_analysis_header(output)
-          metrics_analysis.each do |analysis|
+          def initialize(stdout:, stderr:, color:, analysis_result:)
+            @stdout = stdout
+            @stderr = stderr
+            @color = color
+            @analysis_result = analysis_result.to_h.transform_values { |v| v.is_a?(Data) ? v.to_h : v }
+            @total_unique_metrics = @analysis_result[:total_unique_metrics]
+            @metrics_analysis = @analysis_result[:metrics_analysis]
+            @total_possible_custom_metrics = @analysis_result[:total_possible_custom_metrics]
+          end
+
+          def render
+            raise NotImplementedError, "Subclasses must implement this method"
+          end
+        end
+
+        class TextFormatter < BaseFormatter
+          attr_reader :output
+
+          def render
+            @output = StringIO.new
+            format_analysis_output
+            @output.string
+          end
+
+          private
+
+          # Format the analysis output for display
+          def format_analysis_output
+            format_metric_analysis_header(output)
+
+            analysis_result[:metrics_analysis].each do |analysis|
+              output.puts
+              format_metric_analysis(output, analysis)
+              line(output, placement: :flat)
+            end
+
+            summary(
+              output,
+              analysis_result[:total_unique_metrics],
+              analysis_result[:total_possible_custom_metrics]
+            )
+            output.string
+          end
+
+          def line(output, placement: :top)
+            if placement == :top
+              output.puts "┌──────────────────────────────────────────────────────────────────────────────────────────────┐".white.on.blue
+            elsif placement == :bottom
+              output.puts "└──────────────────────────────────────────────────────────────────────────────────────────────┘".white.on.blue
+            elsif placement == :middle
+              output.puts "├──────────────────────────────────────────────────────────────────────────────────────────────┤".white.on.blue
+            elsif placement == :flat
+              output.puts " ──────────────────────────────────────────────────────────────────────────────────────────────".white.bold
+            end
+          end
+
+          def summary(output, total_unique_metrics, total_possible_custom_metrics)
+            line(output)
+            output.puts "│ Schema Analysis Results:                                                                     │".yellow.bold.on.blue
+            output.puts "│                                        SUMMARY                                               │".white.on.blue
+            line(output, placement: :bottom)
             output.puts
-            format_metric_analysis(output, analysis)
-            line(output, placement: :flat)
+            output.puts "                     Total unique metrics: #{("%3d" % total_unique_metrics).bold.green}"
+            output.puts "Total possible custom metric combinations: #{("%3d" % total_possible_custom_metrics).bold.green}"
+            output.puts
           end
-          summary(output, total_unique_metrics, total_possible_custom_metrics)
-          output.string
-        end
 
-        def line(output, placement: :top)
-          if placement == :top
-            output.puts "┌──────────────────────────────────────────────────────────────────────────────────────────────┐".white.on.blue
-          elsif placement == :bottom
-            output.puts "└──────────────────────────────────────────────────────────────────────────────────────────────┘".white.on.blue
-          elsif placement == :middle
-            output.puts "├──────────────────────────────────────────────────────────────────────────────────────────────┤".white.on.blue
-          elsif placement == :flat
-            output.puts " ──────────────────────────────────────────────────────────────────────────────────────────────".white.bold
+          def format_metric_analysis_header(output)
+            line(output)
+            output.puts "│ Detailed Metric Analysis:                                                                    │".white.on.blue
+            line(output, placement: :bottom)
+          end
+
+          def format_metric_analysis(output, analysis)
+            output.puts "  • #{analysis[:metric_type].to_s.cyan}('#{analysis[:metric_name].yellow.bold}')"
+            if analysis[:expanded_names].size > 1
+              output.puts  "    Expanded names:"
+              output.print "      • ".yellow
+              output.puts analysis[:expanded_names].join("\n      • ").yellow
+            end
+            output.puts
+            output.puts "                              Unique tags: #{("%3d" % analysis[:unique_tags]).bold.green}"
+            output.puts "                         Total tag values: #{("%3d" % analysis[:unique_tag_values]).bold.green}"
+            output.puts "                    Possible combinations: #{("%3d" % analysis[:total_combinations]).bold.green}"
+            output.puts
           end
         end
 
-        def summary(output, total_unique_metrics, total_possible_custom_metrics)
-          line(output)
-          output.puts "│ Schema Analysis Results:                                                                     │".yellow.bold.on.blue
-          output.puts "│                                        SUMMARY                                               │".white.on.blue
-          line(output, placement: :bottom)
-          output.puts
-          output.puts "                     Total unique metrics: #{("%3d" % total_unique_metrics).bold.green}"
-          output.puts "Total possible custom metric combinations: #{("%3d" % total_possible_custom_metrics).bold.green}"
-          output.puts
-        end
-
-        def format_metric_analysis_header(output)
-          line(output)
-          output.puts "│ Detailed Metric Analysis:                                                                    │".white.on.blue
-          line(output, placement: :bottom)
-        end
-
-        def format_metric_analysis(output, analysis)
-          output.puts "  • #{analysis.metric_type.to_s.cyan}('#{analysis.metric_name.yellow.bold}')"
-          if analysis.expanded_names.size > 1
-            output.puts  "    Expanded names:"
-            output.print "      • ".yellow
-            output.puts analysis.expanded_names.join("\n      • ").yellow
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        # JSON Formatter classes
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        class JSONFormatter < BaseFormatter
+          def render
+            JSON.pretty_generate(analysis_result.to_h)
           end
-          output.puts
-          output.puts "                              Unique tags: #{("%3d" % analysis.unique_tags).bold.green}"
-          output.puts "                         Total tag values: #{("%3d" % analysis.unique_tag_values).bold.green}"
-          output.puts "                    Possible combinations: #{("%3d" % analysis.total_combinations).bold.green}"
-          output.puts
+        end
+
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        # YAML Formatter classes
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+        class YAMLFormatter < BaseFormatter
+          def render
+            YAML.dump(analysis_result.to_h)
+          end
         end
       end
     end

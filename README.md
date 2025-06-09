@@ -280,38 +280,31 @@ if errors.any?
 end
 ```
 
-## Integration Examples
+## Integration Examples: Sidekiq Job Monitoring
 
-### Rails Integration
+Imagine that we are building a Rails application, and we prefer to create our own tracking of the jobs performed, failed, succeeded, as well as their duration. 
+
+> ![TIP] 
+> A very similar approach would work for tracking eg. requests coming to the `ApplicationController` subclasses.
+
+First, let's initialize the schema from a file (we'll dive into the schema a bit later):
 
 ```ruby
 # config/initializers/datadog_statsd.rb
-schema = Datadog::Statsd::Schema.load_file(Rails.root.join('config/metrics_schema.rb'))
+SIDEKIQ_SCHEMA = Datadog::Statsd::Schema.load_file(Rails.root.join('config/metrics/sidekiq.rb'))
 
 Datadog::Statsd::Schema.configure do |config|
   config.statsd = Datadog::Statsd.new
-  config.schema = schema
+  config.schema = SIDEKIQ_SCHEMA
   config.tags = {
     environment: Rails.env,
-    service: 'my-rails-app'
+    service: 'my-rails-app',
+    version: ENV['DEPLOY_SHA']
   }
-end
-
-# app/controllers/application_controller.rb
-class ApplicationController < ActionController::Base
-  before_action :setup_metrics
-
-  private
-
-  def setup_metrics
-    @metrics = Datadog::Statsd::Emitter.new(
-      validation_mode: Rails.env.production? ? :disabled : :warn
-    )
-  end
 end
 ```
 
-### Background Job Monitoring & Metaprogramming FTW
+## Adding Statsd Tracking to a Worker
 
 In this example, a job monitors itself by submitting a relevant statsd metrics:
 
@@ -343,23 +336,36 @@ class OrderProcessingJob
     end
   end
 
+  # Create an instance of an Emitter equipped with our metric
+  # prefix and the tags.
   def emitter
     @emitter ||= Datadog::Statsd::Emitter.new(
       self, 
-      metric: 'jobs', 
+      metric: 'job', 
       tags: { queue: QUEUE }
     )
   end
 end
 ```
 
+The above Emitter will generate the following metrics: 
+
+ * `job.order_processing.success` (counter)
+ * `job.order_processing.failure` (counter)
+ * `job.order_processing.duration.count`
+ * `job.order_processing.duration.min`
+ * `job.order_processing.duration.max`
+ * `job.order_processing.duration.sum`
+ * `job.order_processing.duration.avg`
+
+
 However, you can see that doing this in each job is not practical. Therefore the first question that should be on our mind is — how do we make it so that this behavior would automatically apply to any Job we create?
 
-#### A More General Example
+## Tracking All Sidekiq Workers At Once
 
 The qustion postulated above is — can we come up with a class design patter that allows us to write this code once and forget about it?
 
-Let's take Ruby's metaprogramming for a spin.
+**Let's take Ruby's metaprogramming for a spin.**
 
 One of the most flexible methods to add functionality to all jobs is to create a module that the job classes include *instead of* the implementation-specific `Sidekiq::Job`.
 
@@ -382,7 +388,20 @@ So our module, when included, should:
 * define the `emitter` method so that it's available to all Job instances
 * wrap `perform` method in the exception handling block that emits corresponding metrics as in our example before.
 
-The only tricky part here is the last one: wrapping `perform` method in some shared code. This used to require "monkey patching", but no more. These days Ruby gives us an all-powerful `prepend` method that does exactly what we need. So, without furether ado, here we go:
+The only tricky part here is the last one: wrapping `perform` method in some shared code. This used to require "monkey patching", but no more. These days Ruby gives us an all-powerful `prepend` method that does exactly what we need. 
+
+Final adjustment we'd like to make is the metric naming.
+
+While the metrics such as:
+
+ * `job.order_processing.success` (counter)
+ * `job.order_processing.failure` (counter)
+
+are easy to understand, the question begs: do we really need to insert the job's class name into the metric name? Or — is there a better way?
+
+The truth is — there is! Why create 7 unique metrics **per job** when we can simply submit the same metrics for all jobs, tagged with our job's class name as an "emitter" source?
+
+So, without furether ado, here we go:
 
 ```ruby
 module BackgroundWorker
@@ -400,30 +419,25 @@ module BackgroundWorker
 
         begin
           super(...)
-          emitter.increment("#{metric_name}.success")
+          emitter.increment("success")
         rescue => error
           tags.merge!({ error_type: error.class.name } )
-          emitter.increment("#{metric_name}.failure", tags:)
+          emitter.increment("failure", tags:)
           raise
         ensure
           duration = Time.current - start_time
           emitter.distribution(
-            "#{metric_name}.duration", 
+            "duration", 
             duration * 1000,
             tags:
           )
         end
       end
 
-      def metric_name
-        # Turn OrderProcessingJob into "order_processing"
-        @metric_name ||= self.class.name.underscore.gsub(/_job$/, '')
-      end
-        
       def emitter
         @emitter ||= Datadog::Statsd::Emitter.new(
-          self, 
-          metric: 'jobs', 
+          self.class.name.underscore.gsub(/_job$/, ''), 
+          metric: 'sidekiq.job', 
           tags: { queue: sidekiq_options[:queue] }
         )
       end
@@ -433,9 +447,27 @@ end
 ```
 
 > [!TIP]
-> In a nutshell, we created a reusable module that, upon being included into any Job class, provides 
-> reliable tracking of job successes and failures, as well as the duration. The duration can be graphed for
-> all successful jobs by ensuring the tag `error_type` does not exist. 
+> In a nutshell, we created a reusable module that, upon being included into any Job class, provides  reliable tracking of job successes and failures, as well as the duration. The duration can be graphed for all successful jobs by ensuring the tag `error_type` does not exist. 
+
+So, the above strategy will generate the following metrics **FOR ALL** jobs:
+
+The above Emitter will generate the following metrics: 
+
+ * `sidekiq.job.success` (counter)
+ * `sidekiq.job.failure` (counter)
+ * `sidekiq.job.duration.count`
+ * `sidekiq.job.duration.min`
+ * `sidekiq.job.duration.max`
+ * `sidekiq.job.duration.sum`
+ * `sidekiq.job.duration.avg`
+
+that will be tagged with:
+
+* `queue:       ... `
+* `emitter:     { 'order_processing' | ... }`
+* `environment: { "production" | "staging" | "development" }`
+* `service:     'my-rails-app'`
+* `version:     { "git-sha" }`
 
 ## Development
 
