@@ -141,8 +141,17 @@ end
 Analyze the schema to understand metric costs:
 
 ```bash
-dss analyze --file metrics_schema.rb --color
+dss analyze \
+  --file metrics_schema.rb \
+  --format [ text | json | yaml ] \
+  --[no-]color
 ```
+
+* `--file | -f` points to the schema file
+* `--format [ text | json | yaml ]` defines output format
+* and finally, `--no-color` turns of color output in the text mode only.
+
+For the JSON and YAML formats, you can pipe the output to `jq` or `yq` respectively.
 
 **Output:**
 
